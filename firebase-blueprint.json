@@ -1,0 +1,64 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profiles",
+      "description": "User account details, PR records, and stats",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "joinedDate": { "type": "string" },
+        "trainingStreakDays": { "type": "number" },
+        "totalWorkoutsThisMonth": { "type": "number" },
+        "totalVolumeThisMonthKg": { "type": "number" },
+        "sbdTotalKg": { "type": "number font" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email"]
+    },
+    "workouts": {
+      "title": "Workout Sessions",
+      "description": "Logged gym workout sessions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "durationMinutes": { "type": "number" },
+        "totalVolumeKg": { "type": "number" },
+        "prCount": { "type": "number" }
+      },
+      "required": ["id", "userId", "title", "date"]
+    },
+    "bodyProgress": {
+      "title": "Body Progress Logs",
+      "description": "Weight and body composition logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "date": { "type": "string" },
+        "weightKg": { "type": "number" }
+      },
+      "required": ["id", "userId", "date", "weightKg"]
+    },
+    "leaderboard": {
+      "title": "Leaderboard Entries",
+      "description": "Public SBD power score leaderboard",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userAvatar": { "type": "string" },
+        "sbdTotalKg": { "type": "number" }
+      },
+      "required": ["userId", "userName", "sbdTotalKg"]
+    }
+  }
+}
