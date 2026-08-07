@@ -48,7 +48,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
               className="w-12 h-12 rounded-full object-cover mx-auto border-2 border-slate-300 mt-2"
             />
             <div>
-              <h3 className="text-xs font-bold text-zinc-200 line-clamp-1">{top3[1].userName}</h3>
+              <h3 className="text-xs font-bold text-zinc-200 line-clamp-1">{top3[1].userName.replace(/\s*\(Anda\)$/i, '')}</h3>
               <p className="text-sm font-black text-slate-300 mt-0.5">{top3[1].sbdTotalKg} kg</p>
             </div>
             <div className="text-[9px] text-zinc-400 bg-zinc-950 py-1 rounded-lg border border-zinc-800">
@@ -71,7 +71,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
               className="w-14 h-14 rounded-full object-cover mx-auto border-2 border-amber-400 mt-2 shadow-md shadow-amber-500/30"
             />
             <div>
-              <h3 className="text-xs font-extrabold text-amber-300 line-clamp-1">{top3[0].userName}</h3>
+              <h3 className="text-xs font-extrabold text-amber-300 line-clamp-1">{top3[0].userName.replace(/\s*\(Anda\)$/i, '')}</h3>
               <p className="text-base font-black text-amber-400 mt-0.5">{top3[0].sbdTotalKg} kg</p>
             </div>
             <div className="text-[9px] font-bold text-amber-300 bg-amber-500/10 py-1 rounded-lg border border-amber-500/20">
@@ -92,7 +92,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
               className="w-12 h-12 rounded-full object-cover mx-auto border-2 border-amber-700 mt-2"
             />
             <div>
-              <h3 className="text-xs font-bold text-zinc-200 line-clamp-1">{top3[2].userName}</h3>
+              <h3 className="text-xs font-bold text-zinc-200 line-clamp-1">{top3[2].userName.replace(/\s*\(Anda\)$/i, '')}</h3>
               <p className="text-sm font-black text-amber-600 mt-0.5">{top3[2].sbdTotalKg} kg</p>
             </div>
             <div className="text-[9px] text-zinc-400 bg-zinc-950 py-1 rounded-lg border border-zinc-800">
@@ -147,12 +147,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
 
                   <div>
                     <div className="flex items-center gap-1.5">
-                      <h4 className="text-xs font-bold text-zinc-100">{entry.userName}</h4>
-                      {isSelf && (
-                        <span className="px-1.5 py-0.2 rounded bg-amber-500 text-zinc-950 font-black text-[9px]">
-                          ANDA
-                        </span>
-                      )}
+                      <h4 className="text-xs font-bold text-zinc-100">{entry.userName.replace(/\s*\(Anda\)$/i, '')}</h4>
                     </div>
                     <p className="text-[10px] text-zinc-400 mt-0.5">
                       Squat: <strong className="text-zinc-200">{entry.squatPRKg}kg</strong> • Bench:{' '}

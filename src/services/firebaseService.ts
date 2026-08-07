@@ -33,6 +33,35 @@ export async function saveUserProfileToFirestore(user: UserProfile): Promise<voi
       ...user,
       updatedAt: new Date().toISOString(),
     }, { merge: true });
+
+    // Also update leaderboard entry if exists or create/sync it
+    const cleanName = user.name ? user.name.replace(/\s*\(Anda\)$/i, '') : user.name;
+    const leaderboardRef = doc(db, LEADERBOARD_COL, user.id);
+    const lbSnap = await getDoc(leaderboardRef);
+
+    if (lbSnap.exists()) {
+      await updateDoc(leaderboardRef, {
+        userName: cleanName,
+        userAvatar: user.avatarUrl,
+        lastUpdated: new Date().toISOString().split('T')[0],
+      });
+    } else {
+      const squatPR = user.personalRecords?.['ex-squat']?.maxWeightKg || 0;
+      const benchPR = user.personalRecords?.['ex-bench']?.maxWeightKg || 0;
+      const deadliftPR = user.personalRecords?.['ex-deadlift']?.maxWeightKg || 0;
+      const sbdTotal = user.sbdTotalKg || (squatPR + benchPR + deadliftPR);
+
+      await setDoc(leaderboardRef, {
+        userId: user.id,
+        userName: cleanName,
+        userAvatar: user.avatarUrl,
+        squatPRKg: squatPR,
+        benchPRKg: benchPR,
+        deadliftPRKg: deadliftPR,
+        sbdTotalKg: sbdTotal,
+        lastUpdated: new Date().toISOString().split('T')[0],
+      }, { merge: true });
+    }
   } catch (err) {
     console.warn('Failed to save user profile to Firestore:', err);
   }
@@ -191,4 +220,18 @@ export function listenToLeaderboard(onUpdate: (leaderboard: LeaderboardEntry[]) 
   }, (err) => {
     console.warn('Error listening to leaderboard:', err);
   });
+}
+
+/**
+ * Delete a user profile and leaderboard entry from Firestore
+ */
+export async function deleteUserFromFirestore(userId: string): Promise<void> {
+  try {
+    const userRef = doc(db, USERS_COL, userId);
+    await deleteDoc(userRef);
+    const lbRef = doc(db, LEADERBOARD_COL, userId);
+    await deleteDoc(lbRef);
+  } catch (err) {
+    console.warn('Failed to delete user from Firestore:', err);
+  }
 }

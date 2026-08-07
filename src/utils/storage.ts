@@ -25,11 +25,164 @@ const STORAGE_KEYS = {
 export function loadStoredUser(): UserProfile {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.USER);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const u: UserProfile = JSON.parse(raw);
+      if (u && u.id !== 'usr-1' && u.email !== 'dafin.ramadhan@panglima.id') {
+        if (u.name) {
+          u.name = u.name.replace(/\s*\(Anda\)$/i, '');
+        }
+        return u;
+      }
+    }
   } catch (e) {
     console.error('Failed to load user from localStorage', e);
   }
   return CURRENT_USER_DEFAULT;
+}
+
+export interface LocalAccount {
+  username: string;
+  email: string;
+  password: string;
+  userProfile: UserProfile;
+}
+
+export interface GymAnnouncement {
+  id: string;
+  title: string;
+  message: string;
+  date: string;
+  active: boolean;
+  category: 'info' | 'warning' | 'event';
+}
+
+const GYM_ANNOUNCEMENT_KEY = 'panglima_gym_announcement_v1';
+
+export function getGymAnnouncement(): GymAnnouncement {
+  try {
+    const raw = localStorage.getItem(GYM_ANNOUNCEMENT_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.error('Failed to get gym announcement', e);
+  }
+  return {
+    id: 'anc-1',
+    title: 'Pengumuman Resmi PANGLIMA Gym',
+    message: 'Selamat datang di Portal Member PANGLIMA! Gunakan fitur Log Workout untuk mencatat progressive overload & SBD total Anda.',
+    date: '2026-08-01',
+    active: true,
+    category: 'event',
+  };
+}
+
+export function saveGymAnnouncement(announcement: GymAnnouncement): void {
+  try {
+    localStorage.setItem(GYM_ANNOUNCEMENT_KEY, JSON.stringify(announcement));
+  } catch (e) {
+    console.error('Failed to save gym announcement', e);
+  }
+}
+
+export function getAllRegisteredUsers(): UserProfile[] {
+  const localAccounts = getRegisteredAccounts();
+  const mergedUsers: UserProfile[] = [];
+
+  localAccounts.forEach((acc) => {
+    if (acc.userProfile && acc.userProfile.id) {
+      const idx = mergedUsers.findIndex(u => u.id === acc.userProfile.id || u.email === acc.email);
+      if (idx >= 0) {
+        mergedUsers[idx] = acc.userProfile;
+      } else {
+        mergedUsers.push(acc.userProfile);
+      }
+    }
+  });
+
+  return mergedUsers;
+}
+
+const REGISTERED_ACCOUNTS_KEY = 'panglima_registered_accounts_v3';
+
+export function getRegisteredAccounts(): LocalAccount[] {
+  try {
+    const raw = localStorage.getItem(REGISTERED_ACCOUNTS_KEY);
+    if (raw) {
+      const parsed: LocalAccount[] = JSON.parse(raw);
+      const MOCK_EMAILS = [
+        'dafin.ramadhan@panglima.id',
+        'admin@panglima.id',
+        'budi.santoso@panglima.id',
+        'rian.power@panglima.id',
+        'siti.rahma@panglima.id'
+      ];
+      return parsed.filter(a => !MOCK_EMAILS.includes(a.email.toLowerCase()) && a.userProfile?.id !== 'usr-1');
+    }
+  } catch (e) {
+    console.error('Failed to get registered accounts', e);
+  }
+  return [];
+}
+
+export function saveRegisteredAccount(username: string, email: string, password: string, userProfile: UserProfile): void {
+  try {
+    const accounts = getRegisteredAccounts();
+    const cleanUsername = username.trim();
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Check if account already exists
+    const existingIndex = accounts.findIndex(
+      (acc) =>
+        acc.email.toLowerCase() === cleanEmail ||
+        acc.username.toLowerCase() === cleanUsername.toLowerCase()
+    );
+
+    const newAcc: LocalAccount = {
+      username: cleanUsername,
+      email: cleanEmail,
+      password,
+      userProfile,
+    };
+
+    if (existingIndex >= 0) {
+      accounts[existingIndex] = newAcc;
+    } else {
+      accounts.push(newAcc);
+    }
+
+    localStorage.setItem(REGISTERED_ACCOUNTS_KEY, JSON.stringify(accounts));
+  } catch (e) {
+    console.error('Failed to save registered account', e);
+  }
+}
+
+export function removeRegisteredAccount(userIdOrEmail: string): void {
+  try {
+    const accounts = getRegisteredAccounts();
+    const clean = userIdOrEmail.trim().toLowerCase();
+    const updated = accounts.filter(
+      (acc) =>
+        acc.userProfile?.id !== userIdOrEmail &&
+        acc.email.toLowerCase() !== clean &&
+        acc.username.toLowerCase() !== clean
+    );
+    localStorage.setItem(REGISTERED_ACCOUNTS_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to remove registered account', e);
+  }
+}
+
+export function findRegisteredAccount(identifier: string): LocalAccount | null {
+  const cleanId = identifier.trim().toLowerCase();
+  if (!cleanId) return null;
+
+  const accounts = getRegisteredAccounts();
+  const match = accounts.find(
+    (acc) =>
+      acc.username.toLowerCase() === cleanId ||
+      acc.email.toLowerCase() === cleanId
+  );
+
+  return match || null;
 }
 
 export function saveStoredUser(user: UserProfile) {
@@ -37,30 +190,12 @@ export function saveStoredUser(user: UserProfile) {
     localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
 
     if (user && user.email) {
-      const ACCOUNTS_STORAGE_KEY = 'panglima_user_accounts_v2';
-      let accounts: Record<string, any> = {};
-      const rawAccounts = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
-      if (rawAccounts) {
-        try {
-          accounts = JSON.parse(rawAccounts);
-        } catch {
-          accounts = {};
-        }
-      }
-
-      const key = user.email.toLowerCase().trim();
-      if (!accounts[key]) {
-        accounts[key] = {
-          name: user.name,
-          email: user.email,
-          password: '123456',
-          role: user.role,
-          userProfile: user,
-        };
-      } else {
-        accounts[key].userProfile = user;
-      }
-      localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+      saveRegisteredAccount(
+        user.name || 'Member',
+        user.email,
+        '123456',
+        user
+      );
     }
   } catch (e) {
     console.error('Failed to save user', e);
@@ -88,7 +223,11 @@ export function saveStoredExercises(exercises: Exercise[]) {
 export function loadStoredWorkouts(): WorkoutSession[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.WORKOUTS);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed: WorkoutSession[] = JSON.parse(raw);
+      const realWorkouts = parsed.filter(w => w.userId !== 'usr-1' && !['wo-101', 'wo-102', 'wo-103'].includes(w.id));
+      return realWorkouts;
+    }
   } catch (e) {
     console.error('Failed to load workouts', e);
   }
@@ -108,12 +247,12 @@ export function loadStoredLeaderboard(): LeaderboardEntry[] {
     const raw = localStorage.getItem(STORAGE_KEYS.LEADERBOARD);
     if (raw) {
       const parsed: LeaderboardEntry[] = JSON.parse(raw);
-      // Filter out fictional dummy users (usr-lead-* and usr-1)
-      const realUsers = parsed.filter(
-        (item) => !item.userId.startsWith('usr-lead-') && item.userId !== 'usr-1'
-      );
-      if (realUsers.length > 0) {
-        return realUsers.map((entry, idx) => ({ ...entry, rank: idx + 1 }));
+      if (parsed.length > 0) {
+        return parsed.map((entry, idx) => ({ 
+          ...entry, 
+          userName: entry.userName ? entry.userName.replace(/\s*\(Anda\)$/i, '') : entry.userName,
+          rank: idx + 1 
+        }));
       }
     }
   } catch (e) {

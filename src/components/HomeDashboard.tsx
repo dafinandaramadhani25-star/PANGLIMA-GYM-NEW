@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Dumbbell, 
   Trophy, 
@@ -6,9 +6,12 @@ import {
   Scale,
   Percent,
   BicepsFlexed,
-  ChevronRight
+  ChevronRight,
+  Megaphone,
+  X
 } from 'lucide-react';
 import { UserProfile, WorkoutSession } from '../types';
+import { getGymAnnouncement } from '../utils/storage';
 
 interface HomeDashboardProps {
   user: UserProfile;
@@ -23,6 +26,8 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   onStartNewWorkout,
   onNavigateTab,
 }) => {
+  const [announcement, setAnnouncement] = useState(getGymAnnouncement);
+  const [dismissAnnouncement, setDismissAnnouncement] = useState(false);
   const latestBody = user.bodyProgressHistory && user.bodyProgressHistory.length > 0 
     ? user.bodyProgressHistory[user.bodyProgressHistory.length - 1] 
     : null;
@@ -55,6 +60,33 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
 
   return (
     <div className="space-y-4 pb-24 animate-in fade-in duration-300">
+      {/* Official Gym Broadcast Announcement Banner */}
+      {announcement && announcement.active && !dismissAnnouncement && (
+        <div className="bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-zinc-900 border border-amber-500/40 rounded-2xl p-4 relative shadow-md">
+          <button
+            onClick={() => setDismissAnnouncement(true)}
+            className="absolute right-3 top-3 text-zinc-400 hover:text-zinc-100 p-1 rounded-lg bg-zinc-900/60"
+            title="Tutup Pengumuman"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+          <div className="flex items-start gap-3 pr-6">
+            <div className="w-8 h-8 rounded-xl bg-amber-500 text-zinc-950 flex items-center justify-center shrink-0 shadow mt-0.5">
+              <Megaphone className="w-4 h-4 stroke-[2.5]" />
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-400">
+                PENGUMUMAN GYM • {announcement.date}
+              </span>
+              <h3 className="text-xs font-extrabold text-zinc-100">{announcement.title}</h3>
+              <p className="text-xs text-zinc-300 font-medium leading-relaxed">
+                {announcement.message}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Welcome Banner */}
       <div className="rounded-2xl bg-zinc-900 border border-zinc-800/90 p-5 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -116,7 +148,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
               </div>
               <div className="text-right">
                 <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-extrabold inline-block">
-                  Rank #{user.id === 'usr-1' ? '4' : 'Terdaftar'}
+                  SBD Member
                 </span>
               </div>
             </div>

@@ -7,6 +7,8 @@ import {
   X, 
   Image as ImageIcon, 
   Link as LinkIcon,
+  Pencil,
+  User,
   Sparkles
 } from 'lucide-react';
 import { UserProfile, Role } from '../types';
@@ -18,6 +20,7 @@ interface ProfileViewProps {
   onNavigateTab?: (tab: 'workout' | 'ranking') => void;
   onLogout: () => void;
   onUpdateAvatar?: (newAvatarUrl: string) => void;
+  onUpdateUsername?: (newUsername: string) => void;
 }
 
 const PRESET_AVATARS = [
@@ -35,21 +38,61 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   user,
   onLogout,
   onUpdateAvatar,
+  onUpdateUsername,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAvatar, setSelectedAvatar] = useState<string>(user.avatarUrl);
   const [customUrl, setCustomUrl] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'upload' | 'presets' | 'url'>('upload');
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  
+  // Username Editing States
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [usernameInput, setUsernameInput] = useState(user.name);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 3000);
+  };
 
   const handleOpenModal = () => {
     setSelectedAvatar(user.avatarUrl);
     setCustomUrl('');
     setUploadError(null);
     setIsModalOpen(true);
+  };
+
+  const handleSaveUsername = () => {
+    const trimmed = usernameInput.trim();
+    if (!trimmed) {
+      setUsernameError('Username tidak boleh kosong');
+      return;
+    }
+    if (trimmed.length < 3) {
+      setUsernameError('Username minimal 3 karakter');
+      return;
+    }
+
+    if (onUpdateUsername) {
+      onUpdateUsername(trimmed);
+    }
+
+    setUsernameError(null);
+    setIsEditingUsername(false);
+    showToast('Username berhasil diperbarui!');
+  };
+
+  const handleCancelEditUsername = () => {
+    setUsernameInput(user.name);
+    setUsernameError(null);
+    setIsEditingUsername(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,19 +132,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     }
 
     setIsModalOpen(false);
-    setShowSuccessToast(true);
-    setTimeout(() => {
-      setShowSuccessToast(false);
-    }, 3000);
+    showToast('Foto profil berhasil diperbarui!');
   };
 
   return (
     <div className="space-y-5 pb-24 animate-in fade-in duration-300">
       {/* Toast Success Notification */}
-      {showSuccessToast && (
+      {toastMessage && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-zinc-950 px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 font-bold text-xs animate-in fade-in slide-in-from-top-3 border border-emerald-300">
           <Check className="w-4 h-4 stroke-[3]" />
-          <span>Foto profil berhasil diperbarui!</span>
+          <span>{toastMessage}</span>
         </div>
       )}
 
@@ -132,8 +172,65 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <span>Ganti Foto Profil</span>
         </button>
 
-        <h1 className="text-lg font-extrabold text-zinc-100 mt-3">{user.name}</h1>
-        <p className="text-xs text-zinc-400 font-medium">{user.email}</p>
+        {/* Username Display or Edit Mode */}
+        <div className="mt-4 flex flex-col items-center justify-center">
+          {!isEditingUsername ? (
+            <div className="flex items-center justify-center gap-2">
+              <h1 className="text-xl font-extrabold text-zinc-100">{user.name}</h1>
+              <button
+                onClick={() => {
+                  setUsernameInput(user.name);
+                  setUsernameError(null);
+                  setIsEditingUsername(true);
+                }}
+                title="Edit Username"
+                className="p-1.5 rounded-lg text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-all"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="w-full max-w-xs space-y-2 mt-1">
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={usernameInput}
+                  onChange={(e) => {
+                    setUsernameInput(e.target.value);
+                    if (usernameError) setUsernameError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveUsername();
+                    if (e.key === 'Escape') handleCancelEditUsername();
+                  }}
+                  placeholder="Masukkan username baru..."
+                  className="flex-1 bg-zinc-950 border border-amber-500/50 rounded-xl px-3 py-1.5 text-sm text-zinc-100 font-bold focus:outline-none focus:border-amber-400"
+                  autoFocus
+                />
+                <button
+                  onClick={handleSaveUsername}
+                  title="Simpan"
+                  className="p-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow transition-colors"
+                >
+                  <Check className="w-4 h-4 stroke-[3]" />
+                </button>
+                <button
+                  onClick={handleCancelEditUsername}
+                  title="Batal"
+                  className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {usernameError && (
+                <p className="text-[11px] text-red-400 font-medium">{usernameError}</p>
+              )}
+            </div>
+          )}
+
+          <p className="text-xs text-zinc-400 font-medium mt-1">{user.email}</p>
+        </div>
 
         {/* Account Controls */}
         <div className="mt-6 pt-5 border-t border-zinc-800/80">

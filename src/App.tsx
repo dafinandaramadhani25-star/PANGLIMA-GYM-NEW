@@ -18,8 +18,13 @@ import {
   loadStoredLeaderboard, 
   saveStoredLeaderboard, 
   loadStoredAdminStats, 
-  saveStoredAdminStats 
+  saveStoredAdminStats,
+  getAllRegisteredUsers,
+  removeRegisteredAccount
 } from './utils/storage';
+import {
+  deleteUserFromFirestore
+} from './services/firebaseService';
 import { updateLeaderboardWithPRs } from './utils/sbd';
 
 import { Header } from './components/Header';
@@ -64,6 +69,7 @@ export default function App() {
   const [workouts, setWorkouts] = useState<WorkoutSession[]>(loadStoredWorkouts);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(loadStoredLeaderboard);
   const [adminStats, setAdminStats] = useState<AdminStats>(loadStoredAdminStats);
+  const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>(getAllRegisteredUsers);
 
   const [currentRole, setCurrentRole] = useState<Role>(user.role || 'user');
   const [activeTab, setActiveTab] = useState<TabType | 'body'>('home');
@@ -256,9 +262,14 @@ export default function App() {
 
   // Admin Actions
   const handleAdminAddExercise = (newEx: Exercise) => {
-    const updatedExercises = [...exercises, newEx];
+    const updatedExercises = [newEx, ...exercises];
     setExercises(updatedExercises);
     setAdminStats((prev) => ({ ...prev, totalExercises: updatedExercises.length }));
+  };
+
+  const handleAdminEditExercise = (updatedEx: Exercise) => {
+    const updated = exercises.map((e) => (e.id === updatedEx.id ? updatedEx : e));
+    setExercises(updated);
   };
 
   const handleAdminDeleteExercise = (exId: string) => {
@@ -271,6 +282,40 @@ export default function App() {
     setWorkouts(updated);
   };
 
+  const handleAdminToggleUserRole = (userId: string) => {
+    setRegisteredUsers((prev) =>
+      prev.map((u) => {
+        if (u.id === userId) {
+          const nextRole: Role = u.role === 'admin' ? 'user' : 'admin';
+          const updated = { ...u, role: nextRole };
+          if (u.id === user.id) {
+            setUser(updated);
+            setCurrentRole(nextRole);
+          }
+          saveUserProfileToFirestore(updated);
+          return updated;
+        }
+        return u;
+      })
+    );
+  };
+
+  const handleAdminAddUser = (newUser: UserProfile) => {
+    setRegisteredUsers((prev) => [newUser, ...prev]);
+    saveUserProfileToFirestore(newUser);
+  };
+
+  const handleAdminDeleteUser = (userId: string) => {
+    const targetUser = registeredUsers.find((u) => u.id === userId);
+    setRegisteredUsers((prev) => prev.filter((u) => u.id !== userId));
+    setLeaderboard((prev) => prev.filter((l) => l.userId !== userId));
+    deleteUserFromFirestore(userId);
+    if (targetUser) {
+      removeRegisteredAccount(targetUser.id);
+      removeRegisteredAccount(targetUser.email);
+    }
+  };
+
   // Open AI with context
   const handleOpenAIWithPrompt = (promptText: string) => {
     setAiPromptForView(promptText);
@@ -279,18 +324,42 @@ export default function App() {
 
   // Update user avatar profile photo
   const handleUpdateAvatar = (newAvatarUrl: string) => {
-    setUser((prev) => {
-      const updated = { ...prev, avatarUrl: newAvatarUrl };
-      saveStoredUser(updated);
+    const updatedUser = { ...user, avatarUrl: newAvatarUrl };
+    setUser(updatedUser);
+    saveStoredUser(updatedUser);
+    saveUserProfileToFirestore(updatedUser);
+
+    // Sync leaderboard avatar in state & Firestore
+    setLeaderboard((prev) => {
+      const updated = prev.map((item) =>
+        item.userId === user.id ? { ...item, userAvatar: newAvatarUrl } : item
+      );
+      const userEntry = updated.find((e) => e.userId === user.id);
+      if (userEntry) {
+        saveLeaderboardEntryToFirestore(userEntry);
+      }
       return updated;
     });
+  };
 
-    // Sync leaderboard avatar if currentUser is listed
-    setLeaderboard((prev) =>
-      prev.map((item) =>
-        item.userId === user.id ? { ...item, userAvatar: newAvatarUrl } : item
-      )
-    );
+  // Update user display name / username
+  const handleUpdateUsername = (newUsername: string) => {
+    const updatedUser = { ...user, name: newUsername };
+    setUser(updatedUser);
+    saveStoredUser(updatedUser);
+    saveUserProfileToFirestore(updatedUser);
+
+    // Sync leaderboard username in state & Firestore
+    setLeaderboard((prev) => {
+      const updated = prev.map((item) =>
+        item.userId === user.id ? { ...item, userName: newUsername } : item
+      );
+      const userEntry = updated.find((e) => e.userId === user.id);
+      if (userEntry) {
+        saveLeaderboardEntryToFirestore(userEntry);
+      }
+      return updated;
+    });
   };
 
   // Render AuthView if not authenticated or modal active
@@ -320,13 +389,32 @@ export default function App() {
         {currentRole === 'admin' ? (
           /* Admin Mode Screen */
           <AdminDashboard
-            stats={adminStats}
+            stats={{
+              ...adminStats,
+              totalUsers: registeredUsers.length,
+              activeUsersThisWeek: registeredUsers.length,
+              totalExercises: exercises.length,
+              totalWorkouts: workouts.length,
+            }}
             exercises={exercises}
-            users={[user]}
+            users={registeredUsers}
             workouts={workouts}
+            activeAdminTab={
+              activeTab === 'admin-exercises'
+                ? 'exercises'
+                : activeTab === 'admin-users'
+                ? 'users'
+                : activeTab === 'admin-moderation'
+                ? 'moderation'
+                : 'overview'
+            }
             onAddExercise={handleAdminAddExercise}
+            onEditExercise={handleAdminEditExercise}
             onDeleteExercise={handleAdminDeleteExercise}
             onDeleteWorkoutLog={handleAdminDeleteWorkoutLog}
+            onToggleUserRole={handleAdminToggleUserRole}
+            onAddUser={handleAdminAddUser}
+            onDeleteUser={handleAdminDeleteUser}
           />
         ) : (
           /* User Mode Screens */
@@ -383,6 +471,7 @@ export default function App() {
                 onNavigateTab={(t) => setActiveTab(t)}
                 onLogout={handleLogout}
                 onUpdateAvatar={handleUpdateAvatar}
+                onUpdateUsername={handleUpdateUsername}
               />
             )}
           </>

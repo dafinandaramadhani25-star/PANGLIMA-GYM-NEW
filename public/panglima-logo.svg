@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 200" fill="none">
+  <defs>
+    <!-- Vibrant Amber/Orange Power Gradient -->
+    <linearGradient id="panglimaGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFC107" />
+      <stop offset="40%" stop-color="#FF9800" />
+      <stop offset="100%" stop-color="#F55100" />
+    </linearGradient>
+
+    <!-- Metallic Light Gradient for Body -->
+    <linearGradient id="panglimaDarkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#E4E4E7" />
+    </linearGradient>
+
+    <filter id="glowEffect" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#FF9800" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <!-- ICON GROUP -->
+  <g transform="translate(10, 0)">
+    <!-- Hexagonal Shield Outline -->
+    <polygon
+      points="100,8 180,50 180,150 100,192 20,150 20,50"
+      fill="#121215"
+      stroke="#27272A"
+      stroke-width="3"
+    />
+
+    <!-- Dynamic Background Power Swoosh -->
+    <path
+      d="M165 42 L132 25 L88 78 L122 88 Z"
+      fill="url(#panglimaGoldGrad)"
+      opacity="0.9"
+    />
+
+    <!-- MAIN MUSCULAR BODY SILHOUETTE -->
+    <g filter="url(#glowEffect)">
+      <!-- Head -->
+      <path
+        d="M100 28 C90 28 84 36 84 46 C84 54 90 60 100 60 C110 60 116 54 116 46 C116 36 110 28 100 28 Z"
+        fill="url(#panglimaDarkGrad)"
+      />
+
+      <!-- Traps & Neck -->
+      <path
+        d="M84 48 C72 52 62 60 56 68 L78 72 C88 64 112 64 122 72 L144 68 C138 60 128 52 116 48 Z"
+        fill="url(#panglimaDarkGrad)"
+      />
+
+      <!-- Left Deltoid & Bicep -->
+      <path
+        d="M56 68 C40 70 24 85 22 108 C20 126 30 142 46 148 C54 130 50 108 64 88 C66 78 64 72 56 68 Z"
+        fill="url(#panglimaDarkGrad)"
+      />
+      <path
+        d="M30 115 C26 130 36 154 52 165 C60 152 56 132 42 118 Z"
+        fill="url(#panglimaDarkGrad)"
+      />
+
+      <!-- Right Deltoid & Flexed Arm -->
+      <path
+        d="M144 68 C160 70 176 85 178 108 C180 126 170 142 154 148 C146 130 150 108 136 88 C134 78 136 72 144 68 Z"
+        fill="url(#panglimaDarkGrad)"
+      />
+      <path
+        d="M170 115 C174 130 164 154 148 165 C140 152 144 132 158 118 Z"
+        fill="url(#panglimaDarkGrad)"
+      />
+
+      <!-- Chiseled Torso -->
+      <path
+        d="M74 72 C90 68 110 68 126 72 C134 86 128 112 120 135 C110 158 100 180 100 180 C100 180 90 158 80 135 C72 112 66 86 74 72 Z"
+        fill="url(#panglimaDarkGrad)"
+      />
+
+      <!-- Chest Division Cut -->
+      <path
+        d="M100 70 L100 112 M82 92 C92 96 100 96 100 96 M118 92 C108 96 100 96 100 96"
+        stroke="#18181B"
+        stroke-width="3.5"
+        stroke-linecap="round"
+      />
+
+      <!-- 6-Pack Abs Lines -->
+      <path
+        d="M92 120 L108 120 M90 135 L110 135 M94 150 L106 150"
+        stroke="#27272A"
+        stroke-width="2.5"
+        stroke-linecap="round"
+      />
+    </g>
+
+    <!-- Dynamic Lightning Bolt Slash -->
+    <path
+      d="M38 168 C62 136 102 102 168 80 C146 96 112 122 84 162 C70 182 52 188 38 168 Z"
+      fill="url(#panglimaGoldGrad)"
+    />
+    <path
+      d="M28 174 Q68 138 152 98 Q112 132 58 186 Z"
+      fill="#FFD54F"
+      opacity="0.9"
+    />
+  </g>
+
+  <!-- TEXT GROUP: PANGLIMA -->
+  <g transform="translate(210, 118)">
+    <text font-family="'Plus Jakarta Sans', 'Arial Black', -apple-system, sans-serif" font-weight="900" font-size="64" letter-spacing="3" fill="#FFFFFF">
+      PANGLIMA
+    </text>
+    <text font-family="'Plus Jakarta Sans', sans-serif" font-weight="700" font-size="18" letter-spacing="4" fill="#A1A1AA" y="32">
+      GYM & POWERLIFTING TRACKER
+    </text>
+  </g>
+</svg>

@@ -54,7 +54,7 @@ export function updateLeaderboardWithPRs(
   const userEntry: LeaderboardEntry = {
     rank: 0, // recalculated below
     userId: user.id,
-    userName: `${user.name} (Anda)`,
+    userName: user.name,
     userAvatar: user.avatarUrl,
     squatPRKg: squatPR,
     benchPRKg: benchPR,
