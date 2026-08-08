@@ -20,7 +20,8 @@ export type TabType =
   | 'admin-overview' 
   | 'admin-exercises' 
   | 'admin-users' 
-  | 'admin-moderation';
+  | 'admin-moderation'
+  | 'admin-profile';
 
 interface BottomNavigationProps {
   activeTab: TabType;
@@ -34,7 +35,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   isAdminView,
 }) => {
   if (isAdminView) {
-    // Dedicated Admin Navigation Bar (No user tabs: home/workout/ai/ranking are hidden)
+    // Dedicated Admin Navigation Bar
     return (
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#09090b]/95 backdrop-blur-xl border-t border-red-900/40 px-2 py-2 pb-safe">
         <div className="max-w-md mx-auto flex items-center justify-between px-1">
@@ -88,6 +89,19 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           >
             <AlertTriangle className={`w-5 h-5 ${activeTab === 'admin-moderation' ? 'stroke-[2.5px]' : ''}`} />
             <span className="text-[10px] mt-1 tracking-tight">Moderasi</span>
+          </button>
+
+          {/* 👤 Profile */}
+          <button
+            onClick={() => onChangeTab('admin-profile')}
+            className={`flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-xl transition-all ${
+              activeTab === 'admin-profile' || activeTab === 'profile'
+                ? 'text-red-400 font-bold scale-105'
+                : 'text-zinc-400 font-medium hover:text-zinc-200'
+            }`}
+          >
+            <User className={`w-5 h-5 ${activeTab === 'admin-profile' || activeTab === 'profile' ? 'stroke-[2.5px]' : ''}`} />
+            <span className="text-[10px] mt-1 tracking-tight">Profile</span>
           </button>
         </div>
       </nav>

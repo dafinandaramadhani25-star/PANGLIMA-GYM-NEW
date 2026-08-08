@@ -19,7 +19,8 @@ import {
   X,
   Filter,
   Check,
-  Info
+  Info,
+  User
 } from 'lucide-react';
 import { 
   AdminStats, 
@@ -29,6 +30,7 @@ import {
   EquipmentType, 
   WorkoutSession 
 } from '../types';
+import { ProfileView } from './ProfileView';
 import { 
   GymAnnouncement, 
   getGymAnnouncement, 
@@ -40,7 +42,8 @@ interface AdminDashboardProps {
   exercises: Exercise[];
   users: UserProfile[];
   workouts: WorkoutSession[];
-  activeAdminTab?: 'overview' | 'exercises' | 'users' | 'moderation';
+  currentUser: UserProfile;
+  activeAdminTab?: 'overview' | 'exercises' | 'users' | 'moderation' | 'profile';
   onAddExercise: (ex: Exercise) => void;
   onEditExercise: (ex: Exercise) => void;
   onDeleteExercise: (exId: string) => void;
@@ -48,6 +51,10 @@ interface AdminDashboardProps {
   onToggleUserRole: (userId: string) => void;
   onAddUser: (newUser: UserProfile) => void;
   onDeleteUser?: (userId: string) => void;
+  onLogout: () => void;
+  onUpdateAvatar?: (newAvatarUrl: string) => void;
+  onUpdateUsername?: (newUsername: string) => void;
+  onUpdateEmail?: (newEmail: string) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -55,6 +62,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   exercises,
   users,
   workouts,
+  currentUser,
   activeAdminTab: externalAdminTab,
   onAddExercise,
   onEditExercise,
@@ -63,8 +71,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onToggleUserRole,
   onAddUser,
   onDeleteUser,
+  onLogout,
+  onUpdateAvatar,
+  onUpdateUsername,
+  onUpdateEmail,
 }) => {
-  const [internalAdminTab, setInternalAdminTab] = useState<'overview' | 'exercises' | 'users' | 'moderation'>('overview');
+  const [internalAdminTab, setInternalAdminTab] = useState<'overview' | 'exercises' | 'users' | 'moderation' | 'profile'>('overview');
   
   // Tab sync: allow both bottom nav external control or top pill tab control
   const activeTab = externalAdminTab || internalAdminTab;
@@ -226,6 +238,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return matchesSearch && matchesCategory;
   });
 
+  const nonAdminUsers = users.filter((u) => u.role !== 'admin');
+
   const filteredUsers = users.filter((u) => 
     u.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
     u.email.toLowerCase().includes(userSearchQuery.toLowerCase())
@@ -248,14 +262,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* Admin Title Header */}
       <div className="bg-gradient-to-r from-red-950 via-zinc-900 to-zinc-950 rounded-2xl border border-red-500/30 p-4 shadow-xl flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center text-red-400 border border-red-500/30 shadow-lg">
-            <ShieldAlert className="w-5 h-5" />
+          <div className="relative group cursor-pointer" onClick={() => setInternalAdminTab('profile')}>
+            <img
+              src={currentUser.avatarUrl}
+              alt={currentUser.name}
+              className="w-11 h-11 rounded-full object-cover border-2 border-red-500/80 shadow transition-transform group-hover:scale-105"
+            />
+            <div className="absolute -bottom-1 -right-1 bg-red-500 text-zinc-950 p-0.5 rounded-full border border-zinc-900">
+              <ShieldAlert className="w-2.5 h-2.5" />
+            </div>
           </div>
           <div>
-            <h1 className="text-sm font-extrabold text-zinc-100 flex items-center gap-2">
-              <span>Panel Kontrol Admin PANGLIMA</span>
+            <h1 className="text-sm font-extrabold text-zinc-100 flex items-center gap-1.5">
+              <span>{currentUser.name}</span>
             </h1>
-            <p className="text-[11px] text-zinc-400">Master Data, Member Directory & Log Moderation</p>
+            <p className="text-[11px] text-zinc-400">Panel Kontrol Admin PANGLIMA</p>
           </div>
         </div>
 
@@ -282,7 +303,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   Member System
                 </span>
               </div>
-              <p className="text-2xl font-black text-zinc-100 pt-1">{users.length}</p>
+              <p className="text-2xl font-black text-zinc-100 pt-1">{stats.totalUsers ?? nonAdminUsers.length}</p>
               <p className="text-[11px] font-semibold text-zinc-400">Total Pengguna Terdaftar</p>
             </div>
 
@@ -328,7 +349,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </span>
               </div>
               <p className="text-2xl font-black text-zinc-100 pt-1">
-                {stats.activeUsersThisWeek ?? users.length}{' '}
+                {stats.activeUsersThisWeek ?? nonAdminUsers.length}{' '}
                 <span className="text-xs font-bold text-zinc-400">User</span>
               </p>
               <p className="text-[11px] font-semibold text-zinc-400">Pengguna Aktif</p>
@@ -343,7 +364,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <span>Aksi Cepat Admin</span>
             </h3>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <button
                 onClick={handleOpenAddExercise}
                 className="p-3 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-left transition-all flex items-center gap-2.5 cursor-pointer group"
@@ -367,6 +388,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div>
                   <p className="text-xs font-bold text-zinc-200">Tambah Member</p>
                   <p className="text-[10px] text-zinc-500">Registrasi akun baru</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setInternalAdminTab('profile')}
+                className="p-3 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-left transition-all flex items-center gap-2.5 cursor-pointer group"
+              >
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0 group-hover:scale-105">
+                  <User className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-zinc-200">Profil Admin</p>
+                  <p className="text-[10px] text-zinc-500">Edit foto &amp; nama admin</p>
                 </div>
               </button>
             </div>
@@ -630,6 +664,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ADMIN PROFILE TAB */}
+      {activeTab === 'profile' && (
+        <div className="space-y-4">
+          <ProfileView
+            user={currentUser}
+            currentRole="admin"
+            onLogout={onLogout}
+            onUpdateAvatar={onUpdateAvatar}
+            onUpdateUsername={onUpdateUsername}
+            onUpdateEmail={onUpdateEmail}
+          />
         </div>
       )}
 

@@ -500,34 +500,53 @@ export default function App() {
       <main className="max-w-md sm:max-w-xl mx-auto px-4 pt-4">
         {currentRole === 'admin' ? (
           /* Admin Mode Screen */
-          <AdminDashboard
-            stats={{
-              ...adminStats,
-              totalUsers: registeredUsers.length,
-              activeUsersThisWeek: registeredUsers.length,
-              totalExercises: exercises.length,
-              totalWorkouts: workouts.length,
-            }}
-            exercises={exercises}
-            users={registeredUsers}
-            workouts={workouts}
-            activeAdminTab={
-              activeTab === 'admin-exercises'
-                ? 'exercises'
-                : activeTab === 'admin-users'
-                ? 'users'
-                : activeTab === 'admin-moderation'
-                ? 'moderation'
-                : 'overview'
-            }
-            onAddExercise={handleAdminAddExercise}
-            onEditExercise={handleAdminEditExercise}
-            onDeleteExercise={handleAdminDeleteExercise}
-            onDeleteWorkoutLog={handleAdminDeleteWorkoutLog}
-            onToggleUserRole={handleAdminToggleUserRole}
-            onAddUser={handleAdminAddUser}
-            onDeleteUser={handleAdminDeleteUser}
-          />
+          (() => {
+            const nonAdminUsers = registeredUsers.filter((u) => u.role !== 'admin');
+            const activeNonAdminUsers = workouts.length > 0
+              ? nonAdminUsers.filter((u) =>
+                  workouts.some((w) => w.userId === u.id || (w.userName && w.userName.toLowerCase() === u.name.toLowerCase()))
+                )
+              : nonAdminUsers;
+            const activeUserCount = activeNonAdminUsers.length > 0 ? activeNonAdminUsers.length : nonAdminUsers.length;
+
+            return (
+              <AdminDashboard
+                stats={{
+                  ...adminStats,
+                  totalUsers: nonAdminUsers.length,
+                  activeUsersThisWeek: activeUserCount,
+                  totalExercises: exercises.length,
+                  totalWorkouts: workouts.length,
+                }}
+                exercises={exercises}
+                users={registeredUsers}
+                workouts={workouts}
+                currentUser={user}
+                activeAdminTab={
+                  activeTab === 'admin-exercises'
+                    ? 'exercises'
+                    : activeTab === 'admin-users'
+                    ? 'users'
+                    : activeTab === 'admin-moderation'
+                    ? 'moderation'
+                    : activeTab === 'admin-profile' || activeTab === 'profile'
+                    ? 'profile'
+                    : 'overview'
+                }
+                onAddExercise={handleAdminAddExercise}
+                onEditExercise={handleAdminEditExercise}
+                onDeleteExercise={handleAdminDeleteExercise}
+                onDeleteWorkoutLog={handleAdminDeleteWorkoutLog}
+                onToggleUserRole={handleAdminToggleUserRole}
+                onAddUser={handleAdminAddUser}
+                onDeleteUser={handleAdminDeleteUser}
+                onLogout={handleLogout}
+                onUpdateAvatar={handleUpdateAvatar}
+                onUpdateUsername={handleUpdateUsername}
+                onUpdateEmail={handleUpdateUserEmail}
+              />
+            );
+          })()
         ) : (
           /* User Mode Screens */
           <>

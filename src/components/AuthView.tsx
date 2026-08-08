@@ -2,22 +2,22 @@ import React, { useState } from 'react';
 import { 
   ShieldAlert, 
   User, 
-  Mail,
+  Lock,
   CheckCircle2, 
   ArrowRight,
   Loader2,
-  Check,
+  KeyRound,
+  UserPlus,
+  LogIn,
+  X,
   ShieldCheck,
-  KeyRound
+  Key,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { 
-  auth, 
-  googleProvider, 
-  signInWithPopup 
-} from '../lib/firebase';
-import { saveUserProfileToFirestore, getUserProfileFromFirestore } from '../services/firebaseService';
-import { saveRegisteredAccount } from '../utils/storage';
+import { saveUserProfileToFirestore } from '../services/firebaseService';
+import { saveRegisteredAccount, getRegisteredAccounts } from '../utils/storage';
 import { PanglimaLogo } from './PanglimaLogo';
 
 interface AuthViewProps {
@@ -44,7 +44,7 @@ export const DEFAULT_MEMBER_USER: UserProfile = {
 export const DEFAULT_ADMIN_USER: UserProfile = {
   id: 'usr-admin-1',
   name: 'Administrator Gym PANGLIMA',
-  email: 'admin@panglima.id',
+  email: '',
   role: 'admin',
   avatarUrl: 'https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&q=80&w=250',
   joinedDate: new Date().toISOString().split('T')[0],
@@ -59,143 +59,199 @@ export const DEFAULT_ADMIN_USER: UserProfile = {
 export const AuthView: React.FC<AuthViewProps> = ({
   onLoginSuccess,
   onCancel,
+  initialMode = 'login',
 }) => {
-  // Step state: 'google' -> 'username'
-  const [step, setStep] = useState<'google' | 'username'>('google');
+  const [activeTab, setActiveTab] = useState<'login' | 'register'>(initialMode);
   
-  // Pending profile after Google auth
-  const [pendingProfile, setPendingProfile] = useState<UserProfile | null>(null);
-  const [usernameInput, setUsernameInput] = useState('');
-  const [emailInput, setEmailInput] = useState('');
+  // Login Form State
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+
+  // Register Form State
+  const [regUsername, setRegUsername] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
+
+  // Admin Code Modal State
+  const [showAdminCodeModal, setShowAdminCodeModal] = useState(false);
+  const [adminCodeInput, setAdminCodeInput] = useState('');
+  const [showAdminCode, setShowAdminCode] = useState(false);
+  const [adminCodeError, setAdminCodeError] = useState('');
 
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Direct Admin Login Handler
-  const handleAdminSignIn = () => {
-    setIsSubmitting(true);
-    setSuccessMessage('Login Administrator Berhasil! Mengalihkan ke Dashboard Admin...');
-    setTimeout(() => {
-      onLoginSuccess(DEFAULT_ADMIN_USER);
-    }, 500);
-  };
-
-  // Google Sign-In Handler
-  const handleGoogleSignIn = async () => {
+  // Switch Tab Handler
+  const handleTabChange = (tab: 'login' | 'register') => {
+    setActiveTab(tab);
     setErrorMessage('');
     setSuccessMessage('');
-    setIsSubmitting(true);
+  };
 
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const fbUser = result.user;
+  // Open Admin Modal
+  const handleOpenAdminModal = () => {
+    setAdminCodeInput('');
+    setAdminCodeError('');
+    setShowAdminCodeModal(true);
+  };
 
-      let existingProfile = await getUserProfileFromFirestore(fbUser.uid);
+  // Verify Admin Code
+  const handleVerifyAdminCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminCodeError('');
 
-      if (!existingProfile) {
-        const isAdminEmail = fbUser.email?.toLowerCase().includes('admin');
-        existingProfile = {
-          id: fbUser.uid,
-          name: fbUser.displayName || (isAdminEmail ? 'Administrator Gym' : 'Member PANGLIMA'),
-          email: fbUser.email || '',
-          role: isAdminEmail ? 'admin' : 'user',
-          avatarUrl: fbUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
-          joinedDate: new Date().toISOString().split('T')[0],
-          trainingStreakDays: 1,
-          totalWorkoutsThisMonth: 0,
-          totalVolumeThisMonthKg: 0,
-          sbdTotalKg: 0,
-          personalRecords: {},
-          bodyProgressHistory: [],
-        };
-      } else {
-        if (fbUser.email) existingProfile.email = fbUser.email;
-        if (fbUser.displayName) existingProfile.name = fbUser.displayName;
-        if (fbUser.photoURL) existingProfile.avatarUrl = fbUser.photoURL;
-      }
+    if (!adminCodeInput.trim()) {
+      setAdminCodeError('Harap masukkan kode admin.');
+      return;
+    }
 
-      // Save to Firestore and local storage
-      try {
-        await saveUserProfileToFirestore(existingProfile);
-      } catch (e) {
-        console.warn('Firestore save notice:', e);
-      }
-      saveRegisteredAccount(existingProfile.name, existingProfile.email || 'google-user', 'google-auth', existingProfile);
-
-      setSuccessMessage(`Berhasil masuk sebagai ${existingProfile.email || existingProfile.name}!`);
-      setIsSubmitting(false);
-
+    if (adminCodeInput.trim().toLowerCase() === 'panglima') {
+      setIsSubmitting(true);
+      setShowAdminCodeModal(false);
+      setSuccessMessage('Kode Admin Terverifikasi! Mengalihkan ke Dashboard Admin...');
       setTimeout(() => {
-        onLoginSuccess(existingProfile);
-      }, 500);
-
-    } catch (err: any) {
-      console.warn('Google sign in notice:', err);
-
-      // If user closed popup or popup was blocked, offer manual entry fallback
-      const googleFallbackUser: UserProfile = {
-        id: `usr-${Date.now()}`,
-        name: 'Member PANGLIMA',
-        email: '',
-        role: 'user',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
-        joinedDate: new Date().toISOString().split('T')[0],
-        trainingStreakDays: 0,
-        totalWorkoutsThisMonth: 0,
-        totalVolumeThisMonthKg: 0,
-        sbdTotalKg: 0,
-        personalRecords: {},
-        bodyProgressHistory: [],
-      };
-
-      setPendingProfile(googleFallbackUser);
-      setEmailInput('');
-      setUsernameInput(googleFallbackUser.name);
-      setStep('username');
-      setIsSubmitting(false);
-      setSuccessMessage('Popup Google ditutup. Silakan lengkapi email & username Anda di bawah.');
+        onLoginSuccess(DEFAULT_ADMIN_USER);
+      }, 400);
+    } else {
+      setAdminCodeError('Kode Admin salah! Silakan periksa kembali.');
     }
   };
 
-  // Submit Username Step
-  const handleSaveUsername = async (e: React.FormEvent) => {
+  // Login Submit Handler
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pendingProfile) return;
+    setErrorMessage('');
+    setSuccessMessage('');
 
-    const cleanEmail = emailInput.trim().toLowerCase();
-    const cleanUsername = usernameInput.trim();
+    const cleanUsername = loginUsername.trim();
+    const cleanPassword = loginPassword;
 
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      setErrorMessage('Harap masukkan email pribadi yang valid.');
+    if (!cleanUsername) {
+      setErrorMessage('Silakan masukkan username Anda.');
       return;
     }
 
-    if (!cleanUsername) {
-      setErrorMessage('Username tidak boleh kosong.');
+    if (!cleanPassword) {
+      setErrorMessage('Silakan masukkan password Anda.');
+      return;
+    }
+
+    // Admin shortcut login -> trigger admin code verification modal
+    if (cleanUsername.toLowerCase() === 'admin') {
+      handleOpenAdminModal();
       return;
     }
 
     setIsSubmitting(true);
-    setErrorMessage('');
 
-    const finalProfile: UserProfile = {
-      ...pendingProfile,
-      email: cleanEmail,
-      name: cleanUsername,
-    };
+    // Check registered accounts in local storage
+    const registered = getRegisteredAccounts();
+    const foundAcc = registered.find(
+      (acc) =>
+        (acc.username && acc.username.trim().toLowerCase() === cleanUsername.toLowerCase()) ||
+        (acc.email && acc.email.trim().toLowerCase() === cleanUsername.toLowerCase())
+    );
 
-    try {
-      await saveUserProfileToFirestore(finalProfile);
-    } catch (err) {
-      console.warn('Firestore profile save notice:', err);
+    if (foundAcc && foundAcc.userProfile) {
+      // Check if password matches OR if account was affected by password overwrite ('123456')
+      if (foundAcc.password === cleanPassword) {
+        setSuccessMessage(`Selamat datang kembali, ${foundAcc.userProfile.name}!`);
+        setTimeout(() => {
+          onLoginSuccess(foundAcc.userProfile);
+        }, 400);
+        return;
+      } else if (foundAcc.password === '123456') {
+        // Auto-repair password update
+        saveRegisteredAccount(
+          foundAcc.username,
+          foundAcc.email,
+          cleanPassword,
+          foundAcc.userProfile
+        );
+        setSuccessMessage(`Selamat datang kembali, ${foundAcc.userProfile.name}!`);
+        setTimeout(() => {
+          onLoginSuccess(foundAcc.userProfile);
+        }, 400);
+        return;
+      }
     }
 
-    saveRegisteredAccount(cleanUsername, cleanEmail, 'google-auth', finalProfile);
+    // If account not found or wrong password
+    setIsSubmitting(false);
+    setErrorMessage('Username atau password salah. Jika belum punya akun, klik "Daftar Akun".');
+  };
 
-    setSuccessMessage('Data akun berhasil disimpan! Mengalihkan...');
+  // Register Submit Handler
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    const cleanUsername = regUsername.trim();
+    const password = regPassword;
+    const confirmPassword = regConfirmPassword;
+
+    if (!cleanUsername || cleanUsername.length < 3) {
+      setErrorMessage('Username minimal harus 3 karakter.');
+      return;
+    }
+
+    if (!password || password.length < 3) {
+      setErrorMessage('Password minimal harus 3 karakter.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMessage('Password & Konfirmasi Password tidak cocok.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    // Check if username already exists
+    const registered = getRegisteredAccounts();
+    const isTaken = registered.some(
+      (acc) => acc.username.toLowerCase() === cleanUsername.toLowerCase()
+    );
+
+    if (isTaken || cleanUsername.toLowerCase() === 'admin') {
+      setIsSubmitting(false);
+      setErrorMessage('Username sudah terdaftar. Gunakan username lain atau lakukan Login.');
+      return;
+    }
+
+    // Create new User Profile
+    const newUser: UserProfile = {
+      id: `usr-${Date.now()}`,
+      name: cleanUsername,
+      email: `${cleanUsername.toLowerCase().replace(/\s+/g, '')}@panglima.local`,
+      role: 'user',
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+      joinedDate: new Date().toISOString().split('T')[0],
+      trainingStreakDays: 1,
+      totalWorkoutsThisMonth: 0,
+      totalVolumeThisMonthKg: 0,
+      sbdTotalKg: 0,
+      personalRecords: {},
+      bodyProgressHistory: [],
+    };
+
+    // Save to Firestore and Local Account Storage
+    try {
+      await saveUserProfileToFirestore(newUser);
+    } catch (e) {
+      console.warn('Firestore profile save notice:', e);
+    }
+
+    saveRegisteredAccount(cleanUsername, newUser.email, password, newUser);
+
+    setSuccessMessage('Pendaftaran berhasil! Mengalihkan ke dashboard...');
     setTimeout(() => {
-      onLoginSuccess(finalProfile);
+      onLoginSuccess(newUser);
     }, 500);
   };
 
@@ -203,180 +259,146 @@ export const AuthView: React.FC<AuthViewProps> = ({
     <div className="min-h-screen bg-[#09090b] text-zinc-100 flex flex-col justify-center items-center p-4 selection:bg-amber-500 selection:text-zinc-950 relative overflow-hidden">
       {/* Background Gym Image with Dark Gradients */}
       <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-referrer filter brightness-[0.35] contrast-125 scale-105"
+        className="absolute inset-0 bg-cover bg-center bg-no-referrer filter brightness-[0.3] contrast-125 scale-105"
         style={{
           backgroundImage: `url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&q=80&w=1920')`
         }}
       />
       
       {/* Dark Gradient Overlay for Readability */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#09090b] via-[#09090b]/80 to-[#09090b]/60" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#09090b] via-[#09090b]/85 to-[#09090b]/70" />
       
-      <div className="w-full max-w-sm space-y-6 relative z-10">
+      <div className="w-full max-w-sm space-y-5 relative z-10">
         
-        {/* Minimalist Brand Header */}
+        {/* Brand Header */}
         <div className="text-center flex flex-col items-center">
           <PanglimaLogo size="lg" badge="GYM" />
         </div>
 
         {/* Clean Auth Card */}
-        <div className="bg-zinc-900/80 rounded-2xl border border-zinc-800 p-6 space-y-5 shadow-xl backdrop-blur-md">
+        <div className="bg-zinc-900/90 rounded-2xl border border-zinc-800 p-5 space-y-4 shadow-2xl backdrop-blur-md">
           
-          {/* STEP 1: GOOGLE ONLY LOGIN & ADMIN LINK */}
-          {step === 'google' ? (
-            <div className="space-y-4">
-              <div className="text-center space-y-1">
-                <h2 className="text-sm font-bold text-zinc-200">
-                  Masuk Akun
-                </h2>
-                <p className="text-xs text-zinc-400">
-                  Gunakan Akun Google untuk melanjutkan
-                </p>
-              </div>
+          {/* Navigation Tabs: Login Akun / Daftar Akun */}
+          <div className="grid grid-cols-2 p-1 bg-zinc-950 rounded-xl border border-zinc-800/80">
+            <button
+              type="button"
+              onClick={() => handleTabChange('login')}
+              className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeTab === 'login'
+                  ? 'bg-amber-500 text-zinc-950 shadow-md'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Login Akun</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('register')}
+              className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeTab === 'register'
+                  ? 'bg-amber-500 text-zinc-950 shadow-md'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Daftar Akun</span>
+            </button>
+          </div>
 
-              {errorMessage && (
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium flex items-center gap-2">
-                  <ShieldAlert className="w-4 h-4 shrink-0" />
-                  <span>{errorMessage}</span>
-                </div>
-              )}
-
-              {successMessage && (
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-                  <span>{successMessage}</span>
-                </div>
-              )}
-
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={handleGoogleSignIn}
-                className="w-full py-3 px-4 rounded-xl bg-white hover:bg-zinc-100 text-zinc-900 font-bold text-xs transition-colors flex items-center justify-center gap-3 shadow-sm disabled:opacity-50 cursor-pointer"
-              >
-                {isSubmitting ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-zinc-900" />
-                ) : (
-                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                    <path
-                      fill="#EA4335"
-                      d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.2 9 5 12 5z"
-                    />
-                    <path
-                      fill="#4285F4"
-                      d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12 0 12s.7 2.3 1.9 4.7l3.7-2.9z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.2-6.4-5.2L1.9 16C3.7 19.7 7.5 23 12 23z"
-                    />
-                  </svg>
-                )}
-                <span>{isSubmitting ? 'Menghubungkan...' : 'Masuk dengan Google'}</span>
-              </button>
-
-              {/* Divider & Admin / Manual Access Option */}
-              <div className="pt-2 border-t border-zinc-800/80 flex flex-col items-center gap-1.5">
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => {
-                    const manualUser: UserProfile = {
-                      id: `usr-${Date.now()}`,
-                      name: 'Member PANGLIMA',
-                      email: '',
-                      role: 'user',
-                      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
-                      joinedDate: new Date().toISOString().split('T')[0],
-                      trainingStreakDays: 0,
-                      totalWorkoutsThisMonth: 0,
-                      totalVolumeThisMonthKg: 0,
-                      sbdTotalKg: 0,
-                      personalRecords: {},
-                      bodyProgressHistory: [],
-                    };
-                    setPendingProfile(manualUser);
-                    setEmailInput('');
-                    setUsernameInput('Member PANGLIMA');
-                    setStep('username');
-                  }}
-                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-400 hover:text-zinc-200 transition-colors py-1 px-2 rounded-lg hover:bg-zinc-800/50 cursor-pointer"
-                >
-                  <Mail className="w-3.5 h-3.5 text-zinc-400" />
-                  <span>Atau Masuk dengan Email Manual</span>
-                </button>
-
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={handleAdminSignIn}
-                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-400 hover:text-amber-400 transition-colors py-1 px-2 rounded-lg hover:bg-zinc-800/50 cursor-pointer"
-                >
-                  <KeyRound className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Masuk sebagai Admin Gym</span>
-                </button>
-              </div>
+          {/* Feedback Messages */}
+          {errorMessage && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 text-xs font-medium flex items-center gap-2 animate-in fade-in duration-200">
+              <ShieldAlert className="w-4 h-4 shrink-0 text-red-400" />
+              <span>{errorMessage}</span>
             </div>
-          ) : (
-            /* STEP 2: USERNAME & EMAIL SETUP */
-            <form onSubmit={handleSaveUsername} noValidate className="space-y-4">
-              <div className="text-center space-y-1">
-                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-semibold mb-1">
-                  <Check className="w-3 h-3" /> Konfirmasi Akun
-                </div>
-                <h2 className="text-sm font-bold text-zinc-200">
-                  Lengkapi Data Akun
-                </h2>
-                <p className="text-xs text-zinc-400">
-                  Masukkan email pribadi & nama tampilan Anda
-                </p>
-              </div>
+          )}
 
-              {pendingProfile && (
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-950 border border-zinc-800">
-                  <img 
-                    src={pendingProfile.avatarUrl} 
-                    alt={pendingProfile.name}
-                    className="w-9 h-9 rounded-full object-cover border border-amber-500/50 shrink-0"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-zinc-200 truncate">{emailInput || pendingProfile.email || 'Email Pribadi'}</p>
-                    <p className="text-[10px] text-zinc-500 flex items-center gap-1">
-                      {pendingProfile.role === 'admin' ? (
-                        <span className="text-amber-400 font-bold flex items-center gap-1">
-                          <ShieldCheck className="w-3 h-3" /> Admin Account
-                        </span>
-                      ) : (
-                        'Akun Member Terverifikasi'
-                      )}
-                    </p>
-                  </div>
-                </div>
-              )}
+          {successMessage && (
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-medium flex items-center gap-2 animate-in fade-in duration-200">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              <span>{successMessage}</span>
+            </div>
+          )}
 
+          {/* TAB 1: LOGIN FORM */}
+          {activeTab === 'login' ? (
+            <form onSubmit={handleLoginSubmit} noValidate className="space-y-3.5">
               <div className="space-y-1">
-                <label className="block text-[11px] font-medium text-zinc-300">
-                  Email Pribadi
+                <label className="block text-[11px] font-semibold text-zinc-300">
+                  Username
                 </label>
                 <div className="relative">
-                  <Mail className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
+                  <User className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
                   <input
-                    type="email"
+                    type="text"
                     required
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="nama@gmail.com"
+                    value={loginUsername}
+                    onChange={(e) => setLoginUsername(e.target.value)}
+                    placeholder="Masukkan username Anda"
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-zinc-100 font-medium placeholder:text-zinc-600 focus:outline-none focus:border-amber-500"
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[11px] font-medium text-zinc-300">
+                <label className="block text-[11px] font-semibold text-zinc-300">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
+                  <input
+                    type={showLoginPassword ? 'text' : 'password'}
+                    required
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="Masukkan password"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-10 py-2.5 text-xs text-zinc-100 font-medium placeholder:text-zinc-600 focus:outline-none focus:border-amber-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    className="absolute right-3 top-2.5 text-zinc-500 hover:text-zinc-300 p-0.5 transition-colors cursor-pointer"
+                    title={showLoginPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                  >
+                    {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full mt-2 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-md"
+              >
+                {isSubmitting ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />
+                ) : (
+                  <>
+                    <span>Masuk Akun</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              {/* Admin Quick Login Shortcut */}
+              <div className="pt-2 border-t border-zinc-800/80 flex justify-center">
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={handleOpenAdminModal}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-400 hover:text-amber-400 transition-colors py-1 px-2 rounded-lg hover:bg-zinc-800/50 cursor-pointer"
+                >
+                  <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Masuk sebagai Admin Gym</span>
+                </button>
+              </div>
+            </form>
+          ) : (
+            /* TAB 2: REGISTER FORM */
+            <form onSubmit={handleRegisterSubmit} noValidate className="space-y-3.5">
+              <div className="space-y-1">
+                <label className="block text-[11px] font-semibold text-zinc-300">
                   Username / Nama Tampilan
                 </label>
                 <div className="relative">
@@ -384,52 +406,78 @@ export const AuthView: React.FC<AuthViewProps> = ({
                   <input
                     type="text"
                     required
-                    value={usernameInput}
-                    onChange={(e) => setUsernameInput(e.target.value)}
-                    placeholder="Masukkan username"
+                    value={regUsername}
+                    onChange={(e) => setRegUsername(e.target.value)}
+                    placeholder="Contoh: Budi Santoso"
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-zinc-100 font-medium placeholder:text-zinc-600 focus:outline-none focus:border-amber-500"
                   />
                 </div>
               </div>
 
-              {errorMessage && (
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium flex items-center gap-2">
-                  <ShieldAlert className="w-4 h-4 shrink-0" />
-                  <span>{errorMessage}</span>
+              <div className="space-y-1">
+                <label className="block text-[11px] font-semibold text-zinc-300">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
+                  <input
+                    type={showRegPassword ? 'text' : 'password'}
+                    required
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    placeholder="Buat password akun"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-10 py-2.5 text-xs text-zinc-100 font-medium placeholder:text-zinc-600 focus:outline-none focus:border-amber-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegPassword(!showRegPassword)}
+                    className="absolute right-3 top-2.5 text-zinc-500 hover:text-zinc-300 p-0.5 transition-colors cursor-pointer"
+                    title={showRegPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                  >
+                    {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
-              )}
-
-              {successMessage && (
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-                  <span>{successMessage}</span>
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setStep('google')}
-                  disabled={isSubmitting}
-                  className="px-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 font-bold text-xs transition-colors cursor-pointer"
-                >
-                  Kembali
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmitting ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <span>Lanjutkan</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
               </div>
+
+              <div className="space-y-1">
+                <label className="block text-[11px] font-semibold text-zinc-300">
+                  Konfirmasi Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
+                  <input
+                    type={showRegConfirmPassword ? 'text' : 'password'}
+                    required
+                    value={regConfirmPassword}
+                    onChange={(e) => setRegConfirmPassword(e.target.value)}
+                    placeholder="Ulangi password di atas"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-10 py-2.5 text-xs text-zinc-100 font-medium placeholder:text-zinc-600 focus:outline-none focus:border-amber-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
+                    className="absolute right-3 top-2.5 text-zinc-500 hover:text-zinc-300 p-0.5 transition-colors cursor-pointer"
+                    title={showRegConfirmPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                  >
+                    {showRegConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full mt-2 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-md"
+              >
+                {isSubmitting ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />
+                ) : (
+                  <>
+                    <span>Daftar & Masuk</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
             </form>
           )}
 
@@ -439,13 +487,86 @@ export const AuthView: React.FC<AuthViewProps> = ({
           <button
             type="button"
             onClick={onCancel}
-            className="w-full py-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+            className="w-full py-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors flex items-center justify-center gap-1 cursor-pointer"
           >
-            Batal
+            <X className="w-3.5 h-3.5" />
+            <span>Kembali ke Aplikasi</span>
           </button>
         )}
       </div>
+
+      {/* ADMIN CODE VERIFICATION MODAL */}
+      {showAdminCodeModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-zinc-900 border border-amber-500/40 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl relative">
+            
+            <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-zinc-100">Verifikasi Kode Admin</h3>
+                <p className="text-[11px] text-zinc-400">Akses khusus Administrator Gym</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleVerifyAdminCode} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-zinc-300">
+                  Masukkan Kode Keamanan Admin:
+                </label>
+                <div className="relative">
+                  <Key className="w-4 h-4 text-amber-500 absolute left-3 top-3" />
+                  <input
+                    type={showAdminCode ? 'text' : 'password'}
+                    autoFocus
+                    required
+                    value={adminCodeInput}
+                    onChange={(e) => setAdminCodeInput(e.target.value)}
+                    placeholder="Kode Admin"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-10 py-2.5 text-xs text-zinc-100 font-medium placeholder:text-zinc-600 focus:outline-none focus:border-amber-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminCode(!showAdminCode)}
+                    className="absolute right-3 top-2.5 text-zinc-500 hover:text-zinc-300 p-0.5 transition-colors cursor-pointer"
+                    title={showAdminCode ? 'Sembunyikan kode' : 'Tampilkan kode'}
+                  >
+                    {showAdminCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {adminCodeError && (
+                <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 shrink-0 text-red-400" />
+                  <span>{adminCodeError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAdminCodeModal(false)}
+                  className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-md"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Verifikasi & Masuk</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+
 

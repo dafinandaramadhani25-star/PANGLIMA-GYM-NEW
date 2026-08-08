@@ -123,15 +123,14 @@ export function getRegisteredAccounts(): LocalAccount[] {
     const raw = localStorage.getItem(REGISTERED_ACCOUNTS_KEY);
     if (raw) {
       const parsed: LocalAccount[] = JSON.parse(raw);
-      const MOCK_EMAILS = [
-        'dafin.ramadhan@panglima.id',
-        'admin@panglima.id',
-        'budi.santoso@panglima.id',
-        'rian.power@panglima.id',
-        'siti.rahma@panglima.id',
-        'member@panglima.id'
-      ];
-      return parsed.filter(a => !MOCK_EMAILS.includes(a.email.toLowerCase()) && a.userProfile?.id !== 'usr-1');
+      if (Array.isArray(parsed)) {
+        return parsed.filter((a) => {
+          if (!a) return false;
+          const username = (a.username || '').trim();
+          const email = (a.email || '').trim();
+          return (username.length > 0 || email.length > 0) && a.userProfile?.id !== 'usr-1';
+        });
+      }
     }
   } catch (e) {
     console.error('Failed to get registered accounts', e);
@@ -142,20 +141,21 @@ export function getRegisteredAccounts(): LocalAccount[] {
 export function saveRegisteredAccount(username: string, email: string, password: string, userProfile: UserProfile): void {
   try {
     const accounts = getRegisteredAccounts();
-    const cleanUsername = username.trim();
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanUsername = (username || '').trim();
+    const cleanEmail = (email || '').trim().toLowerCase();
 
     // Check if account already exists
     const existingIndex = accounts.findIndex(
       (acc) =>
-        acc.email.toLowerCase() === cleanEmail ||
-        acc.username.toLowerCase() === cleanUsername.toLowerCase()
+        (userProfile.id && acc.userProfile?.id === userProfile.id) ||
+        (cleanUsername && acc.username && acc.username.trim().toLowerCase() === cleanUsername.toLowerCase()) ||
+        (cleanEmail && acc.email && acc.email.trim().toLowerCase() === cleanEmail)
     );
 
     const newAcc: LocalAccount = {
       username: cleanUsername,
       email: cleanEmail,
-      password,
+      password: password || '123456',
       userProfile,
     };
 
@@ -174,12 +174,14 @@ export function saveRegisteredAccount(username: string, email: string, password:
 export function removeRegisteredAccount(userIdOrEmail: string): void {
   try {
     const accounts = getRegisteredAccounts();
-    const clean = userIdOrEmail.trim().toLowerCase();
+    const clean = (userIdOrEmail || '').trim().toLowerCase();
+    if (!clean) return;
+
     const updated = accounts.filter(
       (acc) =>
         acc.userProfile?.id !== userIdOrEmail &&
-        acc.email.toLowerCase() !== clean &&
-        acc.username.toLowerCase() !== clean
+        (acc.email || '').toLowerCase() !== clean &&
+        (acc.username || '').toLowerCase() !== clean
     );
     localStorage.setItem(REGISTERED_ACCOUNTS_KEY, JSON.stringify(updated));
   } catch (e) {
@@ -188,14 +190,14 @@ export function removeRegisteredAccount(userIdOrEmail: string): void {
 }
 
 export function findRegisteredAccount(identifier: string): LocalAccount | null {
-  const cleanId = identifier.trim().toLowerCase();
+  const cleanId = (identifier || '').trim().toLowerCase();
   if (!cleanId) return null;
 
   const accounts = getRegisteredAccounts();
   const match = accounts.find(
     (acc) =>
-      acc.username.toLowerCase() === cleanId ||
-      acc.email.toLowerCase() === cleanId
+      (acc.username && acc.username.toLowerCase() === cleanId) ||
+      (acc.email && acc.email.toLowerCase() === cleanId)
   );
 
   return match || null;
@@ -205,13 +207,22 @@ export function saveStoredUser(user: UserProfile) {
   try {
     localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
 
-    if (user && user.email) {
-      saveRegisteredAccount(
-        user.name || 'Member',
-        user.email,
-        '123456',
-        user
+    if (user && (user.name || user.email)) {
+      const accounts = getRegisteredAccounts();
+      const existing = accounts.find((a) =>
+        (user.id && a.userProfile?.id === user.id) ||
+        (user.name && a.username && a.username.trim().toLowerCase() === user.name.trim().toLowerCase()) ||
+        (user.email && a.email && a.email.trim().toLowerCase() === user.email.trim().toLowerCase())
       );
+
+      if (existing) {
+        saveRegisteredAccount(
+          user.name || existing.username,
+          user.email || existing.email,
+          existing.password, // Preserve existing password!
+          user
+        );
+      }
     }
   } catch (e) {
     console.error('Failed to save user', e);

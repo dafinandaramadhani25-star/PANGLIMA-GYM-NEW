@@ -9,7 +9,8 @@ import {
   Link as LinkIcon,
   Pencil,
   User,
-  Sparkles
+  Sparkles,
+  ShieldCheck
 } from 'lucide-react';
 import { UserProfile, Role } from '../types';
 
@@ -213,7 +214,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   setIsEditingUsername(true);
                 }}
                 title="Edit Username"
-                className="p-1.5 rounded-lg text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-all"
+                className="p-1.5 rounded-lg text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-all cursor-pointer"
               >
                 <Pencil className="w-3.5 h-3.5" />
               </button>
@@ -259,20 +260,37 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           )}
 
           {!isEditingEmail ? (
-            <div className="flex items-center justify-center gap-1.5 mt-1">
-              <p className="text-xs text-zinc-400 font-medium">{user.email || 'Email belum diatur'}</p>
-              <button
-                onClick={() => {
-                  setEmailInput(user.email);
-                  setEmailError(null);
-                  setIsEditingEmail(true);
-                }}
-                title="Edit Email"
-                className="p-1 rounded text-zinc-500 hover:text-amber-400 hover:bg-zinc-800 transition-all cursor-pointer"
-              >
-                <Pencil className="w-3 h-3" />
-              </button>
-            </div>
+            user.email && user.email !== 'admin@panglima.id' ? (
+              <div className="flex items-center justify-center gap-1.5 mt-1">
+                <p className="text-xs text-zinc-400 font-medium">{user.email}</p>
+                <button
+                  onClick={() => {
+                    setEmailInput(user.email);
+                    setEmailError(null);
+                    setIsEditingEmail(true);
+                  }}
+                  title="Edit Email"
+                  className="p-1 rounded text-zinc-500 hover:text-amber-400 hover:bg-zinc-800 transition-all cursor-pointer"
+                >
+                  <Pencil className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-1.5 mt-1">
+                <button
+                  onClick={() => {
+                    setEmailInput('');
+                    setEmailError(null);
+                    setIsEditingEmail(true);
+                  }}
+                  title="Atur Email"
+                  className="p-1 text-xs text-zinc-500 hover:text-amber-400 transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <Pencil className="w-3 h-3" />
+                  <span>Atur Email</span>
+                </button>
+              </div>
+            )
           ) : (
             <div className="w-full max-w-xs space-y-1 mt-1">
               <div className="flex items-center gap-1.5">
@@ -310,6 +328,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 <p className="text-[11px] text-red-400 font-medium">{emailError}</p>
               )}
             </div>
+          )}
+
+          {user.role === 'admin' ? (
+            <span className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 text-[11px] font-black uppercase tracking-wider">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>ROLE: ADMINISTRATOR</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] font-bold uppercase tracking-wider">
+              <User className="w-3.5 h-3.5" />
+              <span>MEMBER GYM</span>
+            </span>
           )}
         </div>
 
