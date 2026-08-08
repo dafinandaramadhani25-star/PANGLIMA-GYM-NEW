@@ -34,23 +34,16 @@ export async function saveUserProfileToFirestore(user: UserProfile): Promise<voi
       updatedAt: new Date().toISOString(),
     }, { merge: true });
 
-    // Also update leaderboard entry if exists or create/sync it
+    // Also update leaderboard entry if sbdTotal > 0
     const cleanName = user.name ? user.name.replace(/\s*\(Anda\)$/i, '') : user.name;
     const leaderboardRef = doc(db, LEADERBOARD_COL, user.id);
-    const lbSnap = await getDoc(leaderboardRef);
 
-    if (lbSnap.exists()) {
-      await updateDoc(leaderboardRef, {
-        userName: cleanName,
-        userAvatar: user.avatarUrl,
-        lastUpdated: new Date().toISOString().split('T')[0],
-      });
-    } else {
-      const squatPR = user.personalRecords?.['ex-squat']?.maxWeightKg || 0;
-      const benchPR = user.personalRecords?.['ex-bench']?.maxWeightKg || 0;
-      const deadliftPR = user.personalRecords?.['ex-deadlift']?.maxWeightKg || 0;
-      const sbdTotal = user.sbdTotalKg || (squatPR + benchPR + deadliftPR);
+    const squatPR = user.personalRecords?.['ex-squat']?.maxWeightKg || 0;
+    const benchPR = user.personalRecords?.['ex-bench']?.maxWeightKg || 0;
+    const deadliftPR = user.personalRecords?.['ex-deadlift']?.maxWeightKg || 0;
+    const sbdTotal = Math.max(user.sbdTotalKg || 0, squatPR + benchPR + deadliftPR);
 
+    if (sbdTotal > 0) {
       await setDoc(leaderboardRef, {
         userId: user.id,
         userName: cleanName,
@@ -61,6 +54,14 @@ export async function saveUserProfileToFirestore(user: UserProfile): Promise<voi
         sbdTotalKg: sbdTotal,
         lastUpdated: new Date().toISOString().split('T')[0],
       }, { merge: true });
+    } else {
+      const lbSnap = await getDoc(leaderboardRef);
+      if (lbSnap.exists()) {
+        const data = lbSnap.data();
+        if (!data?.sbdTotalKg || data.sbdTotalKg === 0) {
+          await deleteDoc(leaderboardRef);
+        }
+      }
     }
   } catch (err) {
     console.warn('Failed to save user profile to Firestore:', err);

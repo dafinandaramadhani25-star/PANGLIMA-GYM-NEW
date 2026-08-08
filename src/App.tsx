@@ -120,34 +120,36 @@ export default function App() {
       return !isMock && total > 0;
     });
 
-    if (validUsers.length === 0) {
-      setLeaderboard([]);
-      return;
-    }
-
     setLeaderboard((prevLb) => {
-      const newLb: LeaderboardEntry[] = validUsers.map((u) => {
-        const existing = prevLb.find((l) => l.userId === u.id);
+      // Preserve existing Firestore leaderboard entries across devices
+      const mergedMap = new Map<string, LeaderboardEntry>();
+      prevLb.forEach((entry) => mergedMap.set(entry.userId, entry));
+
+      validUsers.forEach((u) => {
+        const existing = mergedMap.get(u.id);
         const squatPR = u.personalRecords?.['ex-squat']?.maxWeightKg || existing?.squatPRKg || 0;
         const benchPR = u.personalRecords?.['ex-bench']?.maxWeightKg || existing?.benchPRKg || 0;
         const deadliftPR = u.personalRecords?.['ex-deadlift']?.maxWeightKg || existing?.deadliftPRKg || 0;
         const sbdTotal = u.sbdTotalKg || (squatPR + benchPR + deadliftPR) || existing?.sbdTotalKg || 0;
 
-        return {
-          rank: 0,
-          userId: u.id,
-          userName: u.name,
-          userAvatar: u.avatarUrl,
-          squatPRKg: squatPR,
-          benchPRKg: benchPR,
-          deadliftPRKg: deadliftPR,
-          sbdTotalKg: sbdTotal,
-          lastUpdated: u.joinedDate || new Date().toISOString().split('T')[0],
-        };
+        if (sbdTotal > 0) {
+          mergedMap.set(u.id, {
+            rank: 0,
+            userId: u.id,
+            userName: u.name,
+            userAvatar: u.avatarUrl,
+            squatPRKg: squatPR,
+            benchPRKg: benchPR,
+            deadliftPRKg: deadliftPR,
+            sbdTotalKg: sbdTotal,
+            lastUpdated: u.joinedDate || new Date().toISOString().split('T')[0],
+          });
+        }
       });
 
-      newLb.sort((a, b) => b.sbdTotalKg - a.sbdTotalKg);
-      return newLb.map((item, idx) => ({ ...item, rank: idx + 1 }));
+      const mergedList = Array.from(mergedMap.values()).filter((e) => e.sbdTotalKg > 0);
+      mergedList.sort((a, b) => b.sbdTotalKg - a.sbdTotalKg);
+      return mergedList.map((item, idx) => ({ ...item, rank: idx + 1 }));
     });
   }, [registeredUsers]);
 
