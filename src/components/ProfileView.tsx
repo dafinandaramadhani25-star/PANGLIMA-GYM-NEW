@@ -21,6 +21,7 @@ interface ProfileViewProps {
   onLogout: () => void;
   onUpdateAvatar?: (newAvatarUrl: string) => void;
   onUpdateUsername?: (newUsername: string) => void;
+  onUpdateEmail?: (newEmail: string) => void;
 }
 
 const PRESET_AVATARS = [
@@ -39,6 +40,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onLogout,
   onUpdateAvatar,
   onUpdateUsername,
+  onUpdateEmail,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAvatar, setSelectedAvatar] = useState<string>(user.avatarUrl);
@@ -49,6 +51,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [usernameInput, setUsernameInput] = useState(user.name);
   const [usernameError, setUsernameError] = useState<string | null>(null);
+
+  // Email Editing States
+  const [isEditingEmail, setIsEditingEmail] = useState(false);
+  const [emailInput, setEmailInput] = useState(user.email);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -93,6 +100,28 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     setUsernameInput(user.name);
     setUsernameError(null);
     setIsEditingUsername(false);
+  };
+
+  const handleSaveEmail = () => {
+    const trimmed = emailInput.trim();
+    if (!trimmed || !trimmed.includes('@')) {
+      setEmailError('Format email tidak valid');
+      return;
+    }
+
+    if (onUpdateEmail) {
+      onUpdateEmail(trimmed);
+    }
+
+    setEmailError(null);
+    setIsEditingEmail(false);
+    showToast('Email berhasil diperbarui!');
+  };
+
+  const handleCancelEditEmail = () => {
+    setEmailInput(user.email);
+    setEmailError(null);
+    setIsEditingEmail(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -229,7 +258,59 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </div>
           )}
 
-          <p className="text-xs text-zinc-400 font-medium mt-1">{user.email}</p>
+          {!isEditingEmail ? (
+            <div className="flex items-center justify-center gap-1.5 mt-1">
+              <p className="text-xs text-zinc-400 font-medium">{user.email || 'Email belum diatur'}</p>
+              <button
+                onClick={() => {
+                  setEmailInput(user.email);
+                  setEmailError(null);
+                  setIsEditingEmail(true);
+                }}
+                title="Edit Email"
+                className="p-1 rounded text-zinc-500 hover:text-amber-400 hover:bg-zinc-800 transition-all cursor-pointer"
+              >
+                <Pencil className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
+            <div className="w-full max-w-xs space-y-1 mt-1">
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="email"
+                  value={emailInput}
+                  onChange={(e) => {
+                    setEmailInput(e.target.value);
+                    if (emailError) setEmailError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveEmail();
+                    if (e.key === 'Escape') handleCancelEditEmail();
+                  }}
+                  placeholder="Masukkan email pribadi..."
+                  className="flex-1 bg-zinc-950 border border-amber-500/50 rounded-xl px-3 py-1 text-xs text-zinc-100 font-medium focus:outline-none focus:border-amber-400"
+                  autoFocus
+                />
+                <button
+                  onClick={handleSaveEmail}
+                  title="Simpan"
+                  className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow transition-colors cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                </button>
+                <button
+                  onClick={handleCancelEditEmail}
+                  title="Batal"
+                  className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {emailError && (
+                <p className="text-[11px] text-red-400 font-medium">{emailError}</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Account Controls */}

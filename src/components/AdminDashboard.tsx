@@ -517,7 +517,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
 
             <div className="space-y-2">
-              {filteredUsers.map((usr) => (
+              {filteredUsers.length === 0 ? (
+                <div className="bg-zinc-950 p-6 rounded-xl border border-dashed border-zinc-800 text-center space-y-1">
+                  <Users className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-zinc-300">Belum Ada Member Terdaftar</p>
+                  <p className="text-[11px] text-zinc-500">Database member kosong &amp; bersih layaknya website baru.</p>
+                </div>
+              ) : (
+                filteredUsers.map((usr) => (
                 <div
                   key={usr.id}
                   className="bg-zinc-950 p-3.5 rounded-xl border border-zinc-800 flex items-center justify-between gap-3"
@@ -564,7 +571,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </button>
                   </div>
                 </div>
-              ))}
+              )))}
             </div>
           </div>
         </div>

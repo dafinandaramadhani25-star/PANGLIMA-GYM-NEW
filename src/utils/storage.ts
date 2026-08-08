@@ -27,7 +27,12 @@ export function loadStoredUser(): UserProfile {
     const raw = localStorage.getItem(STORAGE_KEYS.USER);
     if (raw) {
       const u: UserProfile = JSON.parse(raw);
-      if (u && u.id !== 'usr-1' && u.email !== 'dafin.ramadhan@panglima.id') {
+      if (
+        u && 
+        u.id !== 'usr-1' && 
+        u.email !== 'dafin.ramadhan@panglima.id' && 
+        u.email !== 'member@panglima.id'
+      ) {
         if (u.name) {
           u.name = u.name.replace(/\s*\(Anda\)$/i, '');
         }
@@ -68,9 +73,9 @@ export function getGymAnnouncement(): GymAnnouncement {
   return {
     id: 'anc-1',
     title: 'Pengumuman Resmi PANGLIMA Gym',
-    message: 'Selamat datang di Portal Member PANGLIMA! Gunakan fitur Log Workout untuk mencatat progressive overload & SBD total Anda.',
+    message: '',
     date: '2026-08-01',
-    active: true,
+    active: false,
     category: 'event',
   };
 }
@@ -101,7 +106,17 @@ export function getAllRegisteredUsers(): UserProfile[] {
   return mergedUsers;
 }
 
-const REGISTERED_ACCOUNTS_KEY = 'panglima_registered_accounts_v3';
+const REGISTERED_ACCOUNTS_KEY = 'panglima_registered_accounts_v4';
+
+export function clearAllRegisteredAccounts(): void {
+  try {
+    localStorage.removeItem(REGISTERED_ACCOUNTS_KEY);
+    localStorage.removeItem(STORAGE_KEYS.USER);
+    localStorage.removeItem(STORAGE_KEYS.LEADERBOARD);
+  } catch (e) {
+    console.error('Failed to clear registered accounts', e);
+  }
+}
 
 export function getRegisteredAccounts(): LocalAccount[] {
   try {
@@ -113,7 +128,8 @@ export function getRegisteredAccounts(): LocalAccount[] {
         'admin@panglima.id',
         'budi.santoso@panglima.id',
         'rian.power@panglima.id',
-        'siti.rahma@panglima.id'
+        'siti.rahma@panglima.id',
+        'member@panglima.id'
       ];
       return parsed.filter(a => !MOCK_EMAILS.includes(a.email.toLowerCase()) && a.userProfile?.id !== 'usr-1');
     }
@@ -247,8 +263,23 @@ export function loadStoredLeaderboard(): LeaderboardEntry[] {
     const raw = localStorage.getItem(STORAGE_KEYS.LEADERBOARD);
     if (raw) {
       const parsed: LeaderboardEntry[] = JSON.parse(raw);
-      if (parsed.length > 0) {
-        return parsed.map((entry, idx) => ({ 
+      const MOCK_IDS = ['usr-1', 'usr-2', 'usr-3', 'usr-4', 'usr-admin-1', 'usr-guest', 'usr-member-default'];
+      const MOCK_EMAILS = [
+        'dafin.ramadhan@panglima.id',
+        'admin@panglima.id',
+        'budi.santoso@panglima.id',
+        'rian.power@panglima.id',
+        'siti.rahma@panglima.id',
+        'member@panglima.id'
+      ];
+      const realEntries = parsed.filter(e => 
+        !MOCK_IDS.includes(e.userId) && 
+        !e.userId.startsWith('usr-lead-') &&
+        !MOCK_EMAILS.includes((e.userName || '').toLowerCase()) &&
+        (e.sbdTotalKg > 0)
+      );
+      if (realEntries.length > 0) {
+        return realEntries.map((entry, idx) => ({ 
           ...entry, 
           userName: entry.userName ? entry.userName.replace(/\s*\(Anda\)$/i, '') : entry.userName,
           rank: idx + 1 
@@ -258,7 +289,7 @@ export function loadStoredLeaderboard(): LeaderboardEntry[] {
   } catch (e) {
     console.error('Failed to load leaderboard', e);
   }
-  return INITIAL_LEADERBOARD;
+  return [];
 }
 
 export function saveStoredLeaderboard(leaderboard: LeaderboardEntry[]) {

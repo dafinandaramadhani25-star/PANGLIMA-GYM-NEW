@@ -32,15 +32,26 @@ export const PanglimaAIView: React.FC<PanglimaAIViewProps> = ({
   initialPrompt,
   onClearInitialPrompt,
 }) => {
+  const cleanText = (raw: string): string => {
+    if (!raw) return '';
+    return raw
+      .replace(/#{1,6}\s?/g, '')
+      .replace(/\*{1,3}([^*]+)\*{1,3}/g, '$1')
+      .replace(/\*+/g, '')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/^\s*[\*\-]\s+/gm, '• ')
+      .trim();
+  };
+
   const [messages, setMessages] = useState<AIChatMessage[]>([
     {
       id: 'welcome-msg',
       sender: 'assistant',
-      text: `### 🤖 Halo! Saya **PANGLIMA AI**, Asisten Fitness & Pakar Latihan Personalmu.
+      text: `🤖 Halo! Saya PANGLIMA AI, Asisten Fitness & Pakar Latihan Personalmu.
 
-Saya dapat menganalisis data **Personal Record (SBD)**, riwayat volume latihan, serta perkembangan komposisi tubuhmu secara otomatis.
+Saya dapat menganalisis data Personal Record (SBD), riwayat volume latihan, dan perkembangan komposisi tubuhmu secara otomatis.
 
-Silakan pilih salah satu **Quick Action** di bawah ini atau tuliskan pertanyaan spesifik seputar program latihan & progresmu!`,
+Silakan pilih salah satu Quick Action di bawah ini atau tuliskan pertanyaan seputar program latihanmu!`,
       timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -287,7 +298,7 @@ Silakan pilih salah satu **Quick Action** di bawah ini atau tuliskan pertanyaan 
                 )}
 
                 <div className="whitespace-pre-wrap font-sans">
-                  {msg.text}
+                  {cleanText(msg.text)}
                 </div>
 
                 <div

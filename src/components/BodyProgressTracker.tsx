@@ -47,7 +47,10 @@ export const BodyProgressTracker: React.FC<BodyProgressTrackerProps> = ({
   const [compareLogAfter, setCompareLogAfter] = useState<BodyProgressLog | null>(null);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState<boolean>(false);
 
-  const history = user.bodyProgressHistory || [];
+  const rawHistory = user.bodyProgressHistory || [];
+  const sortedHistory = [...rawHistory].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -86,20 +89,154 @@ export const BodyProgressTracker: React.FC<BodyProgressTrackerProps> = ({
     setIsFormOpen(false);
   };
 
-  const chartData = history.map((log) => ({
-    date: new Date(log.date).toLocaleDateString('id-ID', { month: 'short', day: 'numeric' }),
-    weight: log.weightKg,
-    bodyFat: log.bodyFatPercentage || null,
-    muscleMass: log.muscleMassKg || null,
-  }));
+  const dateCounts: Record<string, number> = {};
+  sortedHistory.forEach((log) => {
+    dateCounts[log.date] = (dateCounts[log.date] || 0) + 1;
+  });
 
-  const latest = history[history.length - 1];
-  const earliest = history[0];
+  const currentCounts: Record<string, number> = {};
 
-  const weightChange = latest && earliest ? (latest.weightKg - earliest.weightKg).toFixed(1) : 0;
+  const chartData = sortedHistory.map((log, index) => {
+    const prevWeightLog = index > 0 ? sortedHistory[index - 1] : null;
+    const weightDiff = prevWeightLog ? Number((log.weightKg - prevWeightLog.weightKg).toFixed(1)) : 0;
+
+    let prevBfLog: BodyProgressLog | null = null;
+    for (let i = index - 1; i >= 0; i--) {
+      if (sortedHistory[i].bodyFatPercentage !== undefined && sortedHistory[i].bodyFatPercentage !== null) {
+        prevBfLog = sortedHistory[i];
+        break;
+      }
+    }
+
+    const hasBf = log.bodyFatPercentage !== undefined && log.bodyFatPercentage !== null;
+    const bfDiff = (hasBf && prevBfLog && prevBfLog.bodyFatPercentage !== undefined)
+      ? Number((log.bodyFatPercentage! - prevBfLog.bodyFatPercentage!).toFixed(1))
+      : 0;
+
+    const dateStr = log.date;
+    currentCounts[dateStr] = (currentCounts[dateStr] || 0) + 1;
+    const countOnDate = currentCounts[dateStr];
+    const totalOnDate = dateCounts[dateStr];
+
+    const dateObj = new Date(log.date);
+    const formattedShortDate = isNaN(dateObj.getTime())
+      ? log.date
+      : dateObj.toLocaleDateString('id-ID', { month: 'short', day: 'numeric' });
+    let formattedFullDate = isNaN(dateObj.getTime())
+      ? log.date
+      : dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    if (totalOnDate > 1) {
+      formattedFullDate += ` (Catatan #${countOnDate})`;
+    }
+
+    const prevWeightDate = prevWeightLog && !isNaN(new Date(prevWeightLog.date).getTime())
+      ? new Date(prevWeightLog.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+      : prevWeightLog?.date || '';
+
+    const prevBfDate = prevBfLog && !isNaN(new Date(prevBfLog.date).getTime())
+      ? new Date(prevBfLog.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+      : prevBfLog?.date || '';
+
+    return {
+      chartKey: log.id || `bp-log-${index}`,
+      date: formattedShortDate,
+      fullDate: formattedFullDate,
+      weight: log.weightKg,
+      hasPrevWeight: Boolean(prevWeightLog),
+      prevWeight: prevWeightLog?.weightKg || null,
+      prevWeightDate,
+      weightDiff,
+      bodyFat: hasBf ? log.bodyFatPercentage : null,
+      hasPrevBf: Boolean(prevBfLog),
+      prevBf: prevBfLog?.bodyFatPercentage || null,
+      prevBfDate,
+      bfDiff,
+      muscleMass: log.muscleMassKg || null,
+    };
+  });
+
+  const latest = sortedHistory[sortedHistory.length - 1];
+  const earliest = sortedHistory[0];
+
+  const weightChange = latest && earliest ? (latest.weightKg - earliest.weightKg).toFixed(1) : '0';
   const bfChange = latest?.bodyFatPercentage && earliest?.bodyFatPercentage
     ? (latest.bodyFatPercentage - earliest.bodyFatPercentage).toFixed(1)
-    : 0;
+    : '0';
+
+  const CustomWeightTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const hasPrev = data.hasPrevWeight;
+      const diff = data.weightDiff;
+      return (
+        <div className="bg-zinc-950 border-2 border-emerald-500 rounded-xl p-3 shadow-2xl space-y-1.5 min-w-[200px]">
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide border-b border-zinc-800/80 pb-1">
+            {data.fullDate || data.date}
+          </p>
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-xs text-zinc-400 font-medium">Berat Badan:</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-xl font-black text-emerald-400">{data.weight}</span>
+              <span className="text-xs font-bold text-zinc-300">kg</span>
+            </div>
+          </div>
+
+          {hasPrev ? (
+            <div className="pt-1.5 border-t border-zinc-800/80 flex items-center justify-between text-[11px]">
+              <span className="text-zinc-400">vs {data.prevWeightDate} ({data.prevWeight}kg):</span>
+              <span className={`font-bold ${diff > 0 ? "text-amber-400" : diff < 0 ? "text-emerald-400" : "text-zinc-400"}`}>
+                {diff > 0 ? `+${diff} kg` : diff < 0 ? `${diff} kg` : '0 kg (Tetap)'}
+              </span>
+            </div>
+          ) : (
+            <div className="pt-1 border-t border-zinc-800/80 text-[10px] text-zinc-500 font-semibold italic">
+              Catatan berat badan pertama
+            </div>
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const CustomBodyFatTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const hasPrev = data.hasPrevBf;
+      const diff = data.bfDiff;
+      if (data.bodyFat === null || data.bodyFat === undefined) return null;
+
+      return (
+        <div className="bg-zinc-950 border-2 border-cyan-500 rounded-xl p-3 shadow-2xl space-y-1.5 min-w-[200px]">
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide border-b border-zinc-800/80 pb-1">
+            {data.fullDate || data.date}
+          </p>
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-xs text-zinc-400 font-medium">Body Fat:</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-xl font-black text-cyan-400">{data.bodyFat}</span>
+              <span className="text-xs font-bold text-zinc-300">%</span>
+            </div>
+          </div>
+
+          {hasPrev ? (
+            <div className="pt-1.5 border-t border-zinc-800/80 flex items-center justify-between text-[11px]">
+              <span className="text-zinc-400">vs {data.prevBfDate} ({data.prevBf}%):</span>
+              <span className={`font-bold ${diff > 0 ? "text-amber-400" : diff < 0 ? "text-cyan-400" : "text-zinc-400"}`}>
+                {diff > 0 ? `+${diff}%` : diff < 0 ? `${diff}%` : '0% (Tetap)'}
+              </span>
+            </div>
+          ) : (
+            <div className="pt-1 border-t border-zinc-800/80 text-[10px] text-zinc-500 font-semibold italic">
+              Catatan body fat pertama
+            </div>
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="space-y-5 pb-24 animate-in fade-in duration-300">
@@ -278,73 +415,124 @@ export const BodyProgressTracker: React.FC<BodyProgressTrackerProps> = ({
         </div>
       </div>
 
-      {/* Interactive Recharts Graph */}
-      <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 shadow-lg">
-        <div className="flex items-center justify-between mb-3">
+      {/* Interactive Recharts Graph - Separated into Weight & Body Fat */}
+      <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 shadow-lg space-y-5">
+        <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-bold text-zinc-100">Grafik Perkembangan Komposisi Tubuh</h2>
-            <p className="text-[11px] text-zinc-400">Tren berat badan (kg) & Body Fat (%) sepanjang waktu</p>
+            <h2 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+              <TrendingDown className="w-4 h-4 text-emerald-400" />
+              <span>Grafik Perkembangan Komposisi Tubuh</span>
+            </h2>
+            <p className="text-[11px] text-zinc-400">Terpisah untuk pembacaan angka &amp; selisih yang lebih jelas saat disentuh</p>
           </div>
         </div>
 
-        <div className="h-56 w-full pt-2">
-          {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} />
-                <YAxis stroke="#71717a" fontSize={11} tickLine={false} domain={['auto', 'auto']} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#18181b',
-                    borderColor: '#3f3f46',
-                    borderRadius: '12px',
-                    color: '#f4f4f5',
-                    fontSize: '12px',
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                <Line
-                  type="monotone"
-                  dataKey="weight"
-                  name="Berat Badan (kg)"
-                  stroke="#10b981"
-                  strokeWidth={2.5}
-                  dot={{ r: 4, fill: '#10b981' }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="bodyFat"
-                  name="Body Fat (%)"
-                  stroke="#06b6d4"
-                  strokeWidth={2.5}
-                  dot={{ r: 4, fill: '#06b6d4' }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-full bg-zinc-950/70 rounded-xl border border-zinc-800/80 flex flex-col items-center justify-center p-4 text-center space-y-2">
-              <Scale className="w-8 h-8 text-zinc-600" />
-              <div>
-                <p className="text-xs font-semibold text-zinc-300">Grafik Body Progress Masih Kosong</p>
-                <p className="text-[11px] text-zinc-500 mt-0.5">
-                  Silakan isi form "Catat Baru" di atas untuk menambahkan catatan berat badan & komposisi tubuh pertama Anda.
-                </p>
+        {/* 1. GRAFIK BERAT BADAN (ATAS) */}
+        <div className="bg-zinc-950/70 rounded-xl border border-zinc-800/80 p-3.5 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+              <Scale className="w-4 h-4" />
+              <span>1. Grafik Berat Badan (kg)</span>
+            </span>
+            <span className="text-[10px] text-zinc-500 font-medium">
+              Sentuh titik untuk lihat detail &amp; selisih
+            </span>
+          </div>
+
+          <div className="h-44 w-full pt-1">
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                  <XAxis 
+                    dataKey="chartKey" 
+                    tickFormatter={(val) => chartData.find((d) => d.chartKey === val)?.date || val} 
+                    stroke="#71717a" 
+                    fontSize={11} 
+                    tickLine={false} 
+                  />
+                  <YAxis stroke="#71717a" fontSize={11} tickLine={false} domain={['auto', 'auto']} />
+                  <Tooltip 
+                    content={<CustomWeightTooltip />} 
+                    cursor={{ stroke: '#10b981', strokeWidth: 1.5, strokeDasharray: '3 3' }}
+                    wrapperStyle={{ outline: 'none' }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="weight"
+                    name="Berat Badan (kg)"
+                    stroke="#10b981"
+                    strokeWidth={3}
+                    dot={{ r: 5, fill: '#10b981', stroke: '#042f2e', strokeWidth: 2 }}
+                    activeDot={{ r: 8, stroke: '#10b981', strokeWidth: 3, fill: '#18181b' }}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full bg-zinc-950/70 rounded-xl border border-zinc-800/80 flex flex-col items-center justify-center p-4 text-center space-y-2">
+                <Scale className="w-8 h-8 text-zinc-600" />
+                <p className="text-xs font-semibold text-zinc-300">Belum Ada Data Berat Badan</p>
               </div>
-              <button
-                onClick={() => setIsFormOpen(true)}
-                className="px-3.5 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold hover:bg-emerald-500/30 transition-all inline-flex items-center gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Buka Form Catat Baru</span>
-              </button>
-            </div>
-          )}
+            )}
+          </div>
+        </div>
+
+        {/* 2. GRAFIK BODY FAT (BAWAH) */}
+        <div className="bg-zinc-950/70 rounded-xl border border-zinc-800/80 p-3.5 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+              <Percent className="w-4 h-4" />
+              <span>2. Grafik Persentase Body Fat (%)</span>
+            </span>
+            <span className="text-[10px] text-zinc-500 font-medium">
+              Sentuh titik untuk lihat detail &amp; selisih
+            </span>
+          </div>
+
+          <div className="h-44 w-full pt-1">
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                  <XAxis 
+                    dataKey="chartKey" 
+                    tickFormatter={(val) => chartData.find((d) => d.chartKey === val)?.date || val} 
+                    stroke="#71717a" 
+                    fontSize={11} 
+                    tickLine={false} 
+                  />
+                  <YAxis stroke="#71717a" fontSize={11} tickLine={false} domain={['auto', 'auto']} />
+                  <Tooltip 
+                    content={<CustomBodyFatTooltip />} 
+                    cursor={{ stroke: '#06b6d4', strokeWidth: 1.5, strokeDasharray: '3 3' }}
+                    wrapperStyle={{ outline: 'none' }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="bodyFat"
+                    name="Body Fat (%)"
+                    stroke="#06b6d4"
+                    strokeWidth={3}
+                    dot={{ r: 5, fill: '#06b6d4', stroke: '#083344', strokeWidth: 2 }}
+                    activeDot={{ r: 8, stroke: '#06b6d4', strokeWidth: 3, fill: '#18181b' }}
+                    connectNulls
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full bg-zinc-950/70 rounded-xl border border-zinc-800/80 flex flex-col items-center justify-center p-4 text-center space-y-2">
+                <Percent className="w-8 h-8 text-zinc-600" />
+                <p className="text-xs font-semibold text-zinc-300">Belum Ada Data Body Fat</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Photo Comparison Action Button */}
-      {history.length >= 2 && (
+      {sortedHistory.length >= 2 && (
         <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-zinc-950 border border-emerald-800/60 rounded-2xl p-4 flex items-center justify-between shadow-lg">
           <div>
             <h3 className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
@@ -356,8 +544,8 @@ export const BodyProgressTracker: React.FC<BodyProgressTrackerProps> = ({
           </div>
           <button
             onClick={() => {
-              setCompareLogBefore(history[0]);
-              setCompareLogAfter(history[history.length - 1]);
+              setCompareLogBefore(sortedHistory[0]);
+              setCompareLogAfter(sortedHistory[sortedHistory.length - 1]);
               setIsCompareModalOpen(true);
             }}
             className="px-3.5 py-2 rounded-xl bg-emerald-500 text-zinc-950 font-bold text-xs shadow hover:bg-emerald-400 transition-colors flex items-center gap-1.5 shrink-0"
@@ -376,7 +564,7 @@ export const BodyProgressTracker: React.FC<BodyProgressTrackerProps> = ({
         </h2>
 
         <div className="space-y-3">
-          {history.slice().reverse().map((log) => (
+          {sortedHistory.slice().reverse().map((log) => (
             <div
               key={log.id}
               className="bg-zinc-950 rounded-xl p-3 border border-zinc-800 flex items-center justify-between gap-3"

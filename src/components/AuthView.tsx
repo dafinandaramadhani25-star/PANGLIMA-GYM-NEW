@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { 
   ShieldAlert, 
   User, 
+  Mail,
   CheckCircle2, 
   ArrowRight,
   Loader2,
@@ -65,6 +66,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
   // Pending profile after Google auth
   const [pendingProfile, setPendingProfile] = useState<UserProfile | null>(null);
   const [usernameInput, setUsernameInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
 
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -110,6 +112,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
       }
 
       setPendingProfile(existingProfile);
+      setEmailInput(existingProfile.email || fbUser.email || '');
       setUsernameInput(existingProfile.name || fbUser.displayName || 'Member PANGLIMA');
       setStep('username');
       setIsSubmitting(false);
@@ -119,9 +122,9 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
       // Google account fallback when popup blocked or closed
       const googleFallbackUser: UserProfile = {
-        id: 'usr-google-new',
+        id: `usr-${Date.now()}`,
         name: 'Member PANGLIMA',
-        email: 'member@panglima.id',
+        email: '',
         role: 'user',
         avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
         joinedDate: new Date().toISOString().split('T')[0],
@@ -134,10 +137,11 @@ export const AuthView: React.FC<AuthViewProps> = ({
       };
 
       setPendingProfile(googleFallbackUser);
+      setEmailInput('');
       setUsernameInput(googleFallbackUser.name);
       setStep('username');
       setIsSubmitting(false);
-      setSuccessMessage('Google Auth Berhasil!');
+      setSuccessMessage('Silakan masukkan email pribadi & username Anda di bawah.');
     }
   };
 
@@ -146,7 +150,14 @@ export const AuthView: React.FC<AuthViewProps> = ({
     e.preventDefault();
     if (!pendingProfile) return;
 
+    const cleanEmail = emailInput.trim().toLowerCase();
     const cleanUsername = usernameInput.trim();
+
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setErrorMessage('Harap masukkan email pribadi yang valid.');
+      return;
+    }
+
     if (!cleanUsername) {
       setErrorMessage('Username tidak boleh kosong.');
       return;
@@ -157,6 +168,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
     const finalProfile: UserProfile = {
       ...pendingProfile,
+      email: cleanEmail,
       name: cleanUsername,
     };
 
@@ -166,9 +178,9 @@ export const AuthView: React.FC<AuthViewProps> = ({
       console.warn('Firestore profile save notice:', err);
     }
 
-    saveRegisteredAccount(cleanUsername, finalProfile.email, 'google-auth', finalProfile);
+    saveRegisteredAccount(cleanUsername, cleanEmail, 'google-auth', finalProfile);
 
-    setSuccessMessage('Username disimpan! Mengalihkan...');
+    setSuccessMessage('Data akun berhasil disimpan! Mengalihkan...');
     setTimeout(() => {
       onLoginSuccess(finalProfile);
     }, 500);
@@ -268,17 +280,17 @@ export const AuthView: React.FC<AuthViewProps> = ({
               </div>
             </div>
           ) : (
-            /* STEP 2: USERNAME SETUP */
+            /* STEP 2: USERNAME & EMAIL SETUP */
             <form onSubmit={handleSaveUsername} noValidate className="space-y-4">
               <div className="text-center space-y-1">
                 <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-semibold mb-1">
-                  <Check className="w-3 h-3" /> Google Terhubung
+                  <Check className="w-3 h-3" /> Konfirmasi Akun
                 </div>
                 <h2 className="text-sm font-bold text-zinc-200">
-                  Konfirmasi Username
+                  Lengkapi Data Akun
                 </h2>
                 <p className="text-xs text-zinc-400">
-                  Nama ini akan digunakan di profil & leaderboard
+                  Masukkan email pribadi & nama tampilan Anda
                 </p>
               </div>
 
@@ -287,22 +299,39 @@ export const AuthView: React.FC<AuthViewProps> = ({
                   <img 
                     src={pendingProfile.avatarUrl} 
                     alt={pendingProfile.name}
-                    className="w-9 h-9 rounded-full object-cover border border-amber-500/50"
+                    className="w-9 h-9 rounded-full object-cover border border-amber-500/50 shrink-0"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-zinc-200 truncate">{pendingProfile.email}</p>
+                    <p className="text-xs font-semibold text-zinc-200 truncate">{emailInput || pendingProfile.email || 'Email Pribadi'}</p>
                     <p className="text-[10px] text-zinc-500 flex items-center gap-1">
                       {pendingProfile.role === 'admin' ? (
                         <span className="text-amber-400 font-bold flex items-center gap-1">
                           <ShieldCheck className="w-3 h-3" /> Admin Account
                         </span>
                       ) : (
-                        'Akun Terverifikasi'
+                        'Akun Member Terverifikasi'
                       )}
                     </p>
                   </div>
                 </div>
               )}
+
+              <div className="space-y-1">
+                <label className="block text-[11px] font-medium text-zinc-300">
+                  Email Pribadi
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
+                  <input
+                    type="email"
+                    required
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    placeholder="nama@gmail.com"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-zinc-100 font-medium placeholder:text-zinc-600 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
 
               <div className="space-y-1">
                 <label className="block text-[11px] font-medium text-zinc-300">

@@ -69,7 +69,87 @@ export default function App() {
   const [workouts, setWorkouts] = useState<WorkoutSession[]>(loadStoredWorkouts);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(loadStoredLeaderboard);
   const [adminStats, setAdminStats] = useState<AdminStats>(loadStoredAdminStats);
-  const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>(getAllRegisteredUsers);
+  const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>(() => {
+    const list = getAllRegisteredUsers();
+    const loadedUser = loadStoredUser();
+    if (
+      loadedUser &&
+      loadedUser.id &&
+      loadedUser.id !== 'usr-1' &&
+      loadedUser.id !== 'usr-guest' &&
+      !list.some((u) => u.id === loadedUser.id || (u.email && u.email === loadedUser.email))
+    ) {
+      list.push(loadedUser);
+    }
+    return list;
+  });
+
+  // Sync active user profile into registeredUsers list
+  useEffect(() => {
+    if (user && user.id && user.id !== 'usr-1' && user.id !== 'usr-guest') {
+      setRegisteredUsers((prev) => {
+        const idx = prev.findIndex((u) => u.id === user.id || (u.email && user.email && u.email === user.email));
+        if (idx >= 0) {
+          const copy = [...prev];
+          copy[idx] = user;
+          return copy;
+        }
+        return [...prev, user];
+      });
+    }
+  }, [user]);
+
+  // Keep leaderboard synchronized with registeredUsers so User Role and Admin Role data match
+  useEffect(() => {
+    const MOCK_IDS = ['usr-1', 'usr-2', 'usr-3', 'usr-4', 'usr-admin-1', 'usr-guest', 'usr-member-default'];
+    const MOCK_EMAILS = [
+      'dafin.ramadhan@panglima.id',
+      'admin@panglima.id',
+      'budi.santoso@panglima.id',
+      'rian.power@panglima.id',
+      'siti.rahma@panglima.id',
+      'member@panglima.id'
+    ];
+
+    const validUsers = registeredUsers.filter((u) => {
+      const isMock = MOCK_IDS.includes(u.id) || (u.email && MOCK_EMAILS.includes(u.email.toLowerCase()));
+      const squatPR = u.personalRecords?.['ex-squat']?.maxWeightKg || 0;
+      const benchPR = u.personalRecords?.['ex-bench']?.maxWeightKg || 0;
+      const deadliftPR = u.personalRecords?.['ex-deadlift']?.maxWeightKg || 0;
+      const total = u.sbdTotalKg || (squatPR + benchPR + deadliftPR);
+      return !isMock && total > 0;
+    });
+
+    if (validUsers.length === 0) {
+      setLeaderboard([]);
+      return;
+    }
+
+    setLeaderboard((prevLb) => {
+      const newLb: LeaderboardEntry[] = validUsers.map((u) => {
+        const existing = prevLb.find((l) => l.userId === u.id);
+        const squatPR = u.personalRecords?.['ex-squat']?.maxWeightKg || existing?.squatPRKg || 0;
+        const benchPR = u.personalRecords?.['ex-bench']?.maxWeightKg || existing?.benchPRKg || 0;
+        const deadliftPR = u.personalRecords?.['ex-deadlift']?.maxWeightKg || existing?.deadliftPRKg || 0;
+        const sbdTotal = u.sbdTotalKg || (squatPR + benchPR + deadliftPR) || existing?.sbdTotalKg || 0;
+
+        return {
+          rank: 0,
+          userId: u.id,
+          userName: u.name,
+          userAvatar: u.avatarUrl,
+          squatPRKg: squatPR,
+          benchPRKg: benchPR,
+          deadliftPRKg: deadliftPR,
+          sbdTotalKg: sbdTotal,
+          lastUpdated: u.joinedDate || new Date().toISOString().split('T')[0],
+        };
+      });
+
+      newLb.sort((a, b) => b.sbdTotalKg - a.sbdTotalKg);
+      return newLb.map((item, idx) => ({ ...item, rank: idx + 1 }));
+    });
+  }, [registeredUsers]);
 
   const [currentRole, setCurrentRole] = useState<Role>(user.role || 'user');
   const [activeTab, setActiveTab] = useState<TabType | 'body'>('home');
@@ -97,7 +177,23 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = listenToLeaderboard((fsLeaderboard) => {
       if (fsLeaderboard && fsLeaderboard.length > 0) {
-        setLeaderboard(fsLeaderboard);
+        const MOCK_IDS = ['usr-1', 'usr-2', 'usr-3', 'usr-4', 'usr-admin-1', 'usr-guest', 'usr-member-default'];
+        const MOCK_EMAILS = [
+          'dafin.ramadhan@panglima.id',
+          'admin@panglima.id',
+          'budi.santoso@panglima.id',
+          'rian.power@panglima.id',
+          'siti.rahma@panglima.id',
+          'member@panglima.id'
+        ];
+        const cleanFsList = fsLeaderboard.filter((e) => {
+          const isMock = MOCK_IDS.includes(e.userId) || e.userId.startsWith('usr-lead-');
+          const isMockEmail = MOCK_EMAILS.includes((e.userName || '').toLowerCase());
+          return !isMock && !isMockEmail && e.sbdTotalKg > 0;
+        });
+        setLeaderboard(cleanFsList);
+      } else {
+        setLeaderboard([]);
       }
     });
     return () => unsubscribe();
@@ -360,6 +456,22 @@ export default function App() {
       }
       return updated;
     });
+
+    setRegisteredUsers((prev) =>
+      prev.map((u) => (u.id === user.id ? updatedUser : u))
+    );
+  };
+
+  // Update user email address
+  const handleUpdateUserEmail = (newEmail: string) => {
+    const updatedUser = { ...user, email: newEmail };
+    setUser(updatedUser);
+    saveStoredUser(updatedUser);
+    saveUserProfileToFirestore(updatedUser);
+
+    setRegisteredUsers((prev) =>
+      prev.map((u) => (u.id === user.id ? updatedUser : u))
+    );
   };
 
   // Render AuthView if not authenticated or modal active
@@ -472,6 +584,7 @@ export default function App() {
                 onLogout={handleLogout}
                 onUpdateAvatar={handleUpdateAvatar}
                 onUpdateUsername={handleUpdateUsername}
+                onUpdateEmail={handleUpdateUserEmail}
               />
             )}
           </>
