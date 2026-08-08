@@ -109,18 +109,31 @@ export const AuthView: React.FC<AuthViewProps> = ({
           personalRecords: {},
           bodyProgressHistory: [],
         };
+      } else {
+        if (fbUser.email) existingProfile.email = fbUser.email;
+        if (fbUser.displayName) existingProfile.name = fbUser.displayName;
+        if (fbUser.photoURL) existingProfile.avatarUrl = fbUser.photoURL;
       }
 
-      setPendingProfile(existingProfile);
-      setEmailInput(existingProfile.email || fbUser.email || '');
-      setUsernameInput(existingProfile.name || fbUser.displayName || 'Member PANGLIMA');
-      setStep('username');
+      // Save to Firestore and local storage
+      try {
+        await saveUserProfileToFirestore(existingProfile);
+      } catch (e) {
+        console.warn('Firestore save notice:', e);
+      }
+      saveRegisteredAccount(existingProfile.name, existingProfile.email || 'google-user', 'google-auth', existingProfile);
+
+      setSuccessMessage(`Berhasil masuk sebagai ${existingProfile.email || existingProfile.name}!`);
       setIsSubmitting(false);
-      setSuccessMessage('Google Auth Berhasil!');
+
+      setTimeout(() => {
+        onLoginSuccess(existingProfile);
+      }, 500);
+
     } catch (err: any) {
       console.warn('Google sign in notice:', err);
 
-      // Google account fallback when popup blocked or closed
+      // If user closed popup or popup was blocked, offer manual entry fallback
       const googleFallbackUser: UserProfile = {
         id: `usr-${Date.now()}`,
         name: 'Member PANGLIMA',
@@ -141,7 +154,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
       setUsernameInput(googleFallbackUser.name);
       setStep('username');
       setIsSubmitting(false);
-      setSuccessMessage('Silakan masukkan email pribadi & username Anda di bawah.');
+      setSuccessMessage('Popup Google ditutup. Silakan lengkapi email & username Anda di bawah.');
     }
   };
 
@@ -266,8 +279,37 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 <span>{isSubmitting ? 'Menghubungkan...' : 'Masuk dengan Google'}</span>
               </button>
 
-              {/* Divider & Admin Access Option */}
-              <div className="pt-2 border-t border-zinc-800/80 flex flex-col items-center">
+              {/* Divider & Admin / Manual Access Option */}
+              <div className="pt-2 border-t border-zinc-800/80 flex flex-col items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    const manualUser: UserProfile = {
+                      id: `usr-${Date.now()}`,
+                      name: 'Member PANGLIMA',
+                      email: '',
+                      role: 'user',
+                      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+                      joinedDate: new Date().toISOString().split('T')[0],
+                      trainingStreakDays: 0,
+                      totalWorkoutsThisMonth: 0,
+                      totalVolumeThisMonthKg: 0,
+                      sbdTotalKg: 0,
+                      personalRecords: {},
+                      bodyProgressHistory: [],
+                    };
+                    setPendingProfile(manualUser);
+                    setEmailInput('');
+                    setUsernameInput('Member PANGLIMA');
+                    setStep('username');
+                  }}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-400 hover:text-zinc-200 transition-colors py-1 px-2 rounded-lg hover:bg-zinc-800/50 cursor-pointer"
+                >
+                  <Mail className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Atau Masuk dengan Email Manual</span>
+                </button>
+
                 <button
                   type="button"
                   disabled={isSubmitting}
@@ -364,20 +406,30 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
-              >
-                {isSubmitting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <span>Lanjutkan ke Dashboard</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setStep('google')}
+                  disabled={isSubmitting}
+                  className="px-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Kembali
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <span>Lanjutkan</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </div>
             </form>
           )}
 
