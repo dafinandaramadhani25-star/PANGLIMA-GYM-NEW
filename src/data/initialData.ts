@@ -143,7 +143,7 @@ export const CURRENT_USER_DEFAULT: UserProfile = {
   name: 'Member PANGLIMA',
   email: '',
   role: 'user',
-  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+  avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=GymBro&backgroundColor=ffdfbf,b6e3f4',
   joinedDate: new Date().toISOString().split('T')[0],
   trainingStreakDays: 0,
   totalWorkoutsThisMonth: 0,

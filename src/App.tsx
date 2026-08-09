@@ -23,6 +23,7 @@ import {
   removeRegisteredAccount
 } from './utils/storage';
 import { CURRENT_USER_DEFAULT } from './data/initialData';
+import { SEED_MEMBER_USERS, SEED_MEMBER_LEADERBOARD } from './data/seed50Members';
 import { updateLeaderboardWithPRs } from './utils/sbd';
 
 import { Header } from './components/Header';
@@ -113,20 +114,19 @@ export default function App() {
   // Firebase Real-time All Users Listener (Syncs registered accounts across all devices in real time)
   useEffect(() => {
     const unsubscribe = listenToAllUsers((fsUsers) => {
-      if (fsUsers && fsUsers.length > 0) {
-        setRegisteredUsers((prevLocal) => {
-          const userMap = new Map<string, UserProfile>();
-          // Put existing local accounts
-          prevLocal.forEach((u) => {
-            if (u && u.id) userMap.set(u.id, u);
-          });
-          // Override/add real-time users from Firestore
+      setRegisteredUsers((prevLocal) => {
+        const userMap = new Map<string, UserProfile>();
+        SEED_MEMBER_USERS.forEach((u) => userMap.set(u.id, u));
+        prevLocal.forEach((u) => {
+          if (u && u.id) userMap.set(u.id, u);
+        });
+        if (fsUsers && fsUsers.length > 0) {
           fsUsers.forEach((u) => {
             if (u && u.id) userMap.set(u.id, u);
           });
-          return Array.from(userMap.values());
-        });
-      }
+        }
+        return Array.from(userMap.values());
+      });
     });
     return () => unsubscribe();
   }, []);
@@ -170,7 +170,16 @@ export default function App() {
         const isMockEmail = MOCK_EMAILS.includes((e.userName || '').toLowerCase());
         return !isMock && !isMockEmail && e.sbdTotalKg > 0;
       });
-      setLeaderboard(cleanFsList);
+
+      const lbMap = new Map<string, LeaderboardEntry>();
+      SEED_MEMBER_LEADERBOARD.forEach((e) => lbMap.set(e.userId, e));
+      cleanFsList.forEach((e) => lbMap.set(e.userId, e));
+
+      const mergedList = Array.from(lbMap.values());
+      mergedList.sort((a, b) => (b.sbdTotalKg || 0) - (a.sbdTotalKg || 0));
+
+      const reRanked = mergedList.map((entry, idx) => ({ ...entry, rank: idx + 1 }));
+      setLeaderboard(reRanked);
     });
     return () => unsubscribe();
   }, []);

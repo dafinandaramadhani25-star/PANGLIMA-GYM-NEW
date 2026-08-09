@@ -13,6 +13,13 @@ import {
   INITIAL_LEADERBOARD, 
   INITIAL_ADMIN_STATS 
 } from '../data/initialData';
+import {
+  SEED_MEMBER_USERS,
+  SEED_MEMBER_ACCOUNTS,
+  SEED_MEMBER_WORKOUTS,
+  SEED_MEMBER_LEADERBOARD,
+  SEED_ADMIN_STATS
+} from '../data/seed50Members';
 
 const STORAGE_KEYS = {
   USER: 'panglima_user_profile',
@@ -97,20 +104,17 @@ export function saveGymAnnouncement(announcement: GymAnnouncement): void {
 
 export function getAllRegisteredUsers(): UserProfile[] {
   const localAccounts = getRegisteredAccounts();
-  const mergedUsers: UserProfile[] = [];
+  const userMap = new Map<string, UserProfile>();
+
+  SEED_MEMBER_USERS.forEach((u) => userMap.set(u.id, u));
 
   localAccounts.forEach((acc) => {
     if (acc.userProfile && acc.userProfile.id) {
-      const idx = mergedUsers.findIndex(u => u.id === acc.userProfile.id || u.email === acc.email);
-      if (idx >= 0) {
-        mergedUsers[idx] = acc.userProfile;
-      } else {
-        mergedUsers.push(acc.userProfile);
-      }
+      userMap.set(acc.userProfile.id, acc.userProfile);
     }
   });
 
-  return mergedUsers;
+  return Array.from(userMap.values());
 }
 
 const REGISTERED_ACCOUNTS_KEY = 'panglima_registered_accounts_v4';
@@ -130,19 +134,21 @@ export function getRegisteredAccounts(): LocalAccount[] {
     const raw = localStorage.getItem(REGISTERED_ACCOUNTS_KEY);
     if (raw) {
       const parsed: LocalAccount[] = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((a) => {
-          if (!a) return false;
-          const username = (a.username || '').trim();
-          const email = (a.email || '').trim();
-          return (username.length > 0 || email.length > 0) && a.userProfile?.id !== 'usr-1';
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const accMap = new Map<string, LocalAccount>();
+        SEED_MEMBER_ACCOUNTS.forEach((a) => accMap.set(a.userProfile.id, a));
+        parsed.forEach((a) => {
+          if (a && a.userProfile?.id && a.userProfile.id !== 'usr-1') {
+            accMap.set(a.userProfile.id, a);
+          }
         });
+        return Array.from(accMap.values());
       }
     }
   } catch (e) {
     console.error('Failed to get registered accounts', e);
   }
-  return [];
+  return SEED_MEMBER_ACCOUNTS;
 }
 
 export function saveRegisteredAccount(username: string, email: string, password: string, userProfile: UserProfile): void {
@@ -260,12 +266,15 @@ export function loadStoredWorkouts(): WorkoutSession[] {
     if (raw) {
       const parsed: WorkoutSession[] = JSON.parse(raw);
       const realWorkouts = parsed.filter(w => w.userId !== 'usr-1' && !['wo-101', 'wo-102', 'wo-103'].includes(w.id));
-      return realWorkouts;
+      const woMap = new Map<string, WorkoutSession>();
+      SEED_MEMBER_WORKOUTS.forEach((w) => woMap.set(w.id, w));
+      realWorkouts.forEach((w) => woMap.set(w.id, w));
+      return Array.from(woMap.values());
     }
   } catch (e) {
     console.error('Failed to load workouts', e);
   }
-  return SAMPLE_WORKOUT_HISTORY;
+  return SEED_MEMBER_WORKOUTS;
 }
 
 export function saveStoredWorkouts(workouts: WorkoutSession[]) {
@@ -296,18 +305,24 @@ export function loadStoredLeaderboard(): LeaderboardEntry[] {
         !MOCK_EMAILS.includes((e.userName || '').toLowerCase()) &&
         (e.sbdTotalKg > 0)
       );
-      if (realEntries.length > 0) {
-        return realEntries.map((entry, idx) => ({ 
-          ...entry, 
-          userName: entry.userName ? entry.userName.replace(/\s*\(Anda\)$/i, '') : entry.userName,
-          rank: idx + 1 
-        }));
-      }
+
+      const lbMap = new Map<string, LeaderboardEntry>();
+      SEED_MEMBER_LEADERBOARD.forEach((e) => lbMap.set(e.userId, e));
+      realEntries.forEach((e) => lbMap.set(e.userId, e));
+
+      const mergedList = Array.from(lbMap.values());
+      mergedList.sort((a, b) => (b.sbdTotalKg || 0) - (a.sbdTotalKg || 0));
+
+      return mergedList.map((entry, idx) => ({ 
+        ...entry, 
+        userName: entry.userName ? entry.userName.replace(/\s*\(Anda\)$/i, '') : entry.userName,
+        rank: idx + 1 
+      }));
     }
   } catch (e) {
     console.error('Failed to load leaderboard', e);
   }
-  return [];
+  return SEED_MEMBER_LEADERBOARD;
 }
 
 export function saveStoredLeaderboard(leaderboard: LeaderboardEntry[]) {
@@ -321,11 +336,17 @@ export function saveStoredLeaderboard(leaderboard: LeaderboardEntry[]) {
 export function loadStoredAdminStats(): AdminStats {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.ADMIN_STATS);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed: AdminStats = JSON.parse(raw);
+      if (parsed.totalUsers < 50) {
+        return SEED_ADMIN_STATS;
+      }
+      return parsed;
+    }
   } catch (e) {
     console.error('Failed to load admin stats', e);
   }
-  return INITIAL_ADMIN_STATS;
+  return SEED_ADMIN_STATS;
 }
 
 export function saveStoredAdminStats(stats: AdminStats) {
