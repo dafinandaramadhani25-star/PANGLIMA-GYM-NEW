@@ -22,9 +22,7 @@ import {
   getAllRegisteredUsers,
   removeRegisteredAccount
 } from './utils/storage';
-import {
-  deleteUserFromFirestore
-} from './services/firebaseService';
+import { CURRENT_USER_DEFAULT } from './data/initialData';
 import { updateLeaderboardWithPRs } from './utils/sbd';
 
 import { Header } from './components/Header';
@@ -46,21 +44,34 @@ import {
   saveBodyProgressToFirestore, 
   saveLeaderboardEntryToFirestore, 
   listenToLeaderboard,
+  listenToAllUsers,
   listenToUserWorkouts,
-  getUserProfileFromFirestore
+  getUserProfileFromFirestore,
+  deleteUserFromFirestore
 } from './services/firebaseService';
 
 const AUTH_STORAGE_KEY = 'panglima_is_authenticated';
 
 export default function App() {
-  const [user, setUser] = useState<UserProfile>(loadStoredUser);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY);
       return stored === 'true';
     } catch {
-      return true; // Default to true if already initialized
+      return false;
     }
+  });
+
+  const [user, setUser] = useState<UserProfile>(() => {
+    try {
+      const storedAuth = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (storedAuth === 'true') {
+        return loadStoredUser();
+      }
+    } catch (e) {
+      console.warn('Auth check error:', e);
+    }
+    return CURRENT_USER_DEFAULT;
   });
 
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
@@ -99,59 +110,26 @@ export default function App() {
     }
   }, [user]);
 
-  // Keep leaderboard synchronized with registeredUsers so User Role and Admin Role data match
+  // Firebase Real-time All Users Listener (Syncs registered accounts across all devices in real time)
   useEffect(() => {
-    const MOCK_IDS = ['usr-1', 'usr-2', 'usr-3', 'usr-4', 'usr-admin-1', 'usr-guest', 'usr-member-default'];
-    const MOCK_EMAILS = [
-      'dafin.ramadhan@panglima.id',
-      'admin@panglima.id',
-      'budi.santoso@panglima.id',
-      'rian.power@panglima.id',
-      'siti.rahma@panglima.id',
-      'member@panglima.id'
-    ];
-
-    const validUsers = registeredUsers.filter((u) => {
-      const isMock = MOCK_IDS.includes(u.id) || (u.email && MOCK_EMAILS.includes(u.email.toLowerCase()));
-      const squatPR = u.personalRecords?.['ex-squat']?.maxWeightKg || 0;
-      const benchPR = u.personalRecords?.['ex-bench']?.maxWeightKg || 0;
-      const deadliftPR = u.personalRecords?.['ex-deadlift']?.maxWeightKg || 0;
-      const total = u.sbdTotalKg || (squatPR + benchPR + deadliftPR);
-      return !isMock && total > 0;
-    });
-
-    setLeaderboard((prevLb) => {
-      // Preserve existing Firestore leaderboard entries across devices
-      const mergedMap = new Map<string, LeaderboardEntry>();
-      prevLb.forEach((entry) => mergedMap.set(entry.userId, entry));
-
-      validUsers.forEach((u) => {
-        const existing = mergedMap.get(u.id);
-        const squatPR = u.personalRecords?.['ex-squat']?.maxWeightKg || existing?.squatPRKg || 0;
-        const benchPR = u.personalRecords?.['ex-bench']?.maxWeightKg || existing?.benchPRKg || 0;
-        const deadliftPR = u.personalRecords?.['ex-deadlift']?.maxWeightKg || existing?.deadliftPRKg || 0;
-        const sbdTotal = u.sbdTotalKg || (squatPR + benchPR + deadliftPR) || existing?.sbdTotalKg || 0;
-
-        if (sbdTotal > 0) {
-          mergedMap.set(u.id, {
-            rank: 0,
-            userId: u.id,
-            userName: u.name,
-            userAvatar: u.avatarUrl,
-            squatPRKg: squatPR,
-            benchPRKg: benchPR,
-            deadliftPRKg: deadliftPR,
-            sbdTotalKg: sbdTotal,
-            lastUpdated: u.joinedDate || new Date().toISOString().split('T')[0],
+    const unsubscribe = listenToAllUsers((fsUsers) => {
+      if (fsUsers && fsUsers.length > 0) {
+        setRegisteredUsers((prevLocal) => {
+          const userMap = new Map<string, UserProfile>();
+          // Put existing local accounts
+          prevLocal.forEach((u) => {
+            if (u && u.id) userMap.set(u.id, u);
           });
-        }
-      });
-
-      const mergedList = Array.from(mergedMap.values()).filter((e) => e.sbdTotalKg > 0);
-      mergedList.sort((a, b) => b.sbdTotalKg - a.sbdTotalKg);
-      return mergedList.map((item, idx) => ({ ...item, rank: idx + 1 }));
+          // Override/add real-time users from Firestore
+          fsUsers.forEach((u) => {
+            if (u && u.id) userMap.set(u.id, u);
+          });
+          return Array.from(userMap.values());
+        });
+      }
     });
-  }, [registeredUsers]);
+    return () => unsubscribe();
+  }, []);
 
   const [currentRole, setCurrentRole] = useState<Role>(user.role || 'user');
   const [activeTab, setActiveTab] = useState<TabType | 'body'>('home');
@@ -178,25 +156,21 @@ export default function App() {
   // Firebase Real-time Leaderboard Listener
   useEffect(() => {
     const unsubscribe = listenToLeaderboard((fsLeaderboard) => {
-      if (fsLeaderboard && fsLeaderboard.length > 0) {
-        const MOCK_IDS = ['usr-1', 'usr-2', 'usr-3', 'usr-4', 'usr-admin-1', 'usr-guest', 'usr-member-default'];
-        const MOCK_EMAILS = [
-          'dafin.ramadhan@panglima.id',
-          'admin@panglima.id',
-          'budi.santoso@panglima.id',
-          'rian.power@panglima.id',
-          'siti.rahma@panglima.id',
-          'member@panglima.id'
-        ];
-        const cleanFsList = fsLeaderboard.filter((e) => {
-          const isMock = MOCK_IDS.includes(e.userId) || e.userId.startsWith('usr-lead-');
-          const isMockEmail = MOCK_EMAILS.includes((e.userName || '').toLowerCase());
-          return !isMock && !isMockEmail && e.sbdTotalKg > 0;
-        });
-        setLeaderboard(cleanFsList);
-      } else {
-        setLeaderboard([]);
-      }
+      const MOCK_IDS = ['usr-1', 'usr-2', 'usr-3', 'usr-4', 'usr-admin-1', 'usr-guest', 'usr-member-default'];
+      const MOCK_EMAILS = [
+        'dafin.ramadhan@panglima.id',
+        'admin@panglima.id',
+        'budi.santoso@panglima.id',
+        'rian.power@panglima.id',
+        'siti.rahma@panglima.id',
+        'member@panglima.id'
+      ];
+      const cleanFsList = (fsLeaderboard || []).filter((e) => {
+        const isMock = MOCK_IDS.includes(e.userId) || e.userId.startsWith('usr-lead-');
+        const isMockEmail = MOCK_EMAILS.includes((e.userName || '').toLowerCase());
+        return !isMock && !isMockEmail && e.sbdTotalKg > 0;
+      });
+      setLeaderboard(cleanFsList);
     });
     return () => unsubscribe();
   }, []);
@@ -215,14 +189,18 @@ export default function App() {
 
   // Persist state updates to localStorage & Firestore
   useEffect(() => {
-    saveStoredUser(user);
-    if (user && user.id) {
+    if (isAuthenticated && user && user.id && user.id !== 'usr-guest' && user.id !== 'usr-member-default') {
+      saveStoredUser(user);
       saveUserProfileToFirestore(user);
     }
-  }, [user]);
+  }, [user, isAuthenticated]);
 
   useEffect(() => {
-    localStorage.setItem(AUTH_STORAGE_KEY, isAuthenticated ? 'true' : 'false');
+    if (isAuthenticated) {
+      localStorage.setItem(AUTH_STORAGE_KEY, 'true');
+    } else {
+      localStorage.setItem(AUTH_STORAGE_KEY, 'false');
+    }
   }, [isAuthenticated]);
 
   useEffect(() => {
@@ -247,13 +225,26 @@ export default function App() {
     setCurrentRole(loggedInUser.role);
     setIsAuthenticated(true);
     setShowAuthModal(false);
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, 'true');
+      saveStoredUser(loggedInUser);
+    } catch (e) {
+      console.warn('Failed to save auth to localStorage:', e);
+    }
     saveUserProfileToFirestore(loggedInUser);
   };
 
   const handleLogout = () => {
     signOut(auth).catch(() => {});
     setIsAuthenticated(false);
-    setShowAuthModal(true);
+    setUser(CURRENT_USER_DEFAULT);
+    setShowAuthModal(false);
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem('panglima_user_profile');
+    } catch (e) {
+      console.warn('Failed to clear auth from localStorage:', e);
+    }
   };
 
   // Toggle Role between User & Admin

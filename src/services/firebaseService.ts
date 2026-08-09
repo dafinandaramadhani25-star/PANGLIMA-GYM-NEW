@@ -27,6 +27,9 @@ const EXERCISES_COL = 'exercises';
  * Save or update user profile document in Firestore
  */
 export async function saveUserProfileToFirestore(user: UserProfile): Promise<void> {
+  if (!user || !user.id || user.id === 'usr-guest' || user.id === 'usr-member-default' || user.id === 'usr-1' || user.id === 'usr-admin-1') {
+    return;
+  }
   try {
     const userRef = doc(db, USERS_COL, user.id);
     await setDoc(userRef, {
@@ -95,6 +98,27 @@ export function listenToUserProfile(userId: string, onUpdate: (user: UserProfile
     }
   }, (err) => {
     console.warn('Error listening to user profile:', err);
+  });
+}
+
+/**
+ * Subscribe to real-time updates for all user profiles
+ */
+export function listenToAllUsers(onUpdate: (users: UserProfile[]) => void) {
+  const colRef = collection(db, USERS_COL);
+  return onSnapshot(colRef, (snapshot) => {
+    const list: UserProfile[] = [];
+    snapshot.forEach((docSnap) => {
+      if (docSnap.exists()) {
+        const userData = docSnap.data() as UserProfile;
+        if (userData && userData.id) {
+          list.push(userData);
+        }
+      }
+    });
+    onUpdate(list);
+  }, (err) => {
+    console.warn('Error listening to all users:', err);
   });
 }
 
@@ -207,9 +231,31 @@ export function listenToLeaderboard(onUpdate: (leaderboard: LeaderboardEntry[]) 
 
   return onSnapshot(colRef, (snapshot) => {
     const list: LeaderboardEntry[] = [];
-    snapshot.forEach((doc) => {
-      list.push(doc.data() as LeaderboardEntry);
+    const MOCK_IDS = ['usr-1', 'usr-2', 'usr-3', 'usr-4', 'usr-admin-1', 'usr-guest', 'usr-member-default'];
+    const MOCK_EMAILS = [
+      'dafin.ramadhan@panglima.id',
+      'admin@panglima.id',
+      'budi.santoso@panglima.id',
+      'rian.power@panglima.id',
+      'siti.rahma@panglima.id',
+      'member@panglima.id'
+    ];
+
+    snapshot.forEach((docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as LeaderboardEntry;
+        const isMockId = MOCK_IDS.includes(data.userId) || data.userId.startsWith('usr-lead-');
+        const isMockEmail = MOCK_EMAILS.includes((data.userName || '').toLowerCase());
+        
+        if (isMockId || isMockEmail) {
+          // Clean up mock or legacy test doc from Firestore leaderboard
+          deleteDoc(doc(db, LEADERBOARD_COL, docSnap.id)).catch(() => {});
+        } else if (data.sbdTotalKg > 0) {
+          list.push(data);
+        }
+      }
     });
+
     // Sort by SBD total descending
     list.sort((a, b) => (b.sbdTotalKg || 0) - (a.sbdTotalKg || 0));
     // Assign ranks

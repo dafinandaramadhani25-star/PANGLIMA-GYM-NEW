@@ -24,12 +24,19 @@ const STORAGE_KEYS = {
 
 export function loadStoredUser(): UserProfile {
   try {
+    const isAuth = localStorage.getItem('panglima_is_authenticated');
+    if (isAuth !== 'true') {
+      return CURRENT_USER_DEFAULT;
+    }
     const raw = localStorage.getItem(STORAGE_KEYS.USER);
     if (raw) {
       const u: UserProfile = JSON.parse(raw);
       if (
         u && 
+        u.id && 
         u.id !== 'usr-1' && 
+        u.id !== 'usr-guest' &&
+        u.id !== 'usr-member-default' &&
         u.email !== 'dafin.ramadhan@panglima.id' && 
         u.email !== 'member@panglima.id'
       ) {
