@@ -1,7 +1,25 @@
 [build]
   publish = "dist"
   command = "npm run build"
+  functions = "netlify/functions"
 
+# Route API calls to Netlify Functions first
+[[redirects]]
+  from = "/api/ai/chat"
+  to = "/.netlify/functions/chat"
+  status = 200
+
+[[redirects]]
+  from = "/api/health"
+  to = "/.netlify/functions/health"
+  status = 200
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+# Route all SPA client routes to index.html
 [[redirects]]
   from = "/*"
   to = "/index.html"

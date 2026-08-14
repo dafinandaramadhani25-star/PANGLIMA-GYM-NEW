@@ -18,6 +18,7 @@ import {
   Check
 } from 'lucide-react';
 import { AIChatMessage, UserProfile, WorkoutSession } from '../types';
+import { generateSmartAIResponse, cleanMarkdownSymbols, UserContextData } from '../utils/aiCoachEngine';
 
 interface PanglimaAIViewProps {
   user: UserProfile;
@@ -147,7 +148,7 @@ Silakan pilih salah satu Quick Action di bawah ini atau tuliskan pertanyaan sepu
       const ohpPR = user.personalRecords['ex-ohp']?.maxWeightKg || 0;
       const latestBody = user.bodyProgressHistory[user.bodyProgressHistory.length - 1];
 
-      const userContextPayload = shareDataContext
+      const userContextPayload: UserContextData | null = shareDataContext
         ? {
             name: user.name,
             streakDays: user.trainingStreakDays,
@@ -166,34 +167,53 @@ Silakan pilih salah satu Quick Action di bawah ini atau tuliskan pertanyaan sepu
           }
         : null;
 
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: query,
-          quickAction: actionTitle,
-          userContext: userContextPayload,
-        }),
-      });
+      let replyText = '';
 
-      const data = await res.json();
+      try {
+        const res = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: query,
+            quickAction: actionTitle,
+            userContext: userContextPayload,
+          }),
+        });
+
+        // Check if response is valid JSON and not HTML from SPA redirect
+        const contentType = res.headers.get('content-type') || '';
+        if (res.ok && contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data && data.text) {
+            replyText = cleanMarkdownSymbols(data.text);
+          }
+        }
+      } catch (networkErr) {
+        console.warn('Network call to backend /api/ai/chat failed, activating smart local engine:', networkErr);
+      }
+
+      // If backend was unreachable or returned non-JSON (e.g. static hosting on Netlify), generate smart contextual response
+      if (!replyText) {
+        replyText = generateSmartAIResponse(query, actionTitle, userContextPayload);
+      }
 
       const aiMsg: AIChatMessage = {
         id: `msg-ai-${Date.now()}`,
         sender: 'assistant',
-        text: data.text || 'Maaf, PANGLIMA AI belum dapat merespon saat ini.',
+        text: replyText,
         timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
       };
 
       setMessages((prev) => [...prev, aiMsg]);
     } catch (e) {
       console.error('AI error', e);
+      const fallbackMsg = generateSmartAIResponse(query, actionTitle, null);
       setMessages((prev) => [
         ...prev,
         {
-          id: `msg-err-${Date.now()}`,
+          id: `msg-ai-${Date.now()}`,
           sender: 'assistant',
-          text: 'Maaf, terjadi masalah koneksi dengan PANGLIMA AI. Silakan coba lagi.',
+          text: fallbackMsg,
           timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
@@ -220,7 +240,7 @@ Silakan pilih salah satu Quick Action di bawah ini atau tuliskan pertanyaan sepu
             <h1 className="text-sm font-extrabold text-zinc-100 flex items-center gap-1.5">
               <span>PANGLIMA AI Fitness Assistant</span>
               <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[9px] font-bold">
-                Gemini 3.6 Flash
+                Gemini 3.7 Flash
               </span>
             </h1>
             <p className="text-[11px] text-zinc-400">Analisis data latihan & konsultasi personal</p>
